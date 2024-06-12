@@ -34,6 +34,10 @@ pub fn import_shakespeare(training_ratio: f32) -> (String, String) {
 
 #[cfg(test)]
 mod tests{
+    use std::str::FromStr;
+
+    use crate::bigram::CharSet;
+
     use super::*;
 
     #[test]
@@ -43,7 +47,7 @@ mod tests{
     }
 
     #[test]
-    fn is_reading_all_names(){
+    fn reading_all_names(){
         let (a,b) = import_names(0.9);
         assert_eq!(a.len()+b.len(), 32033);
     }
@@ -56,9 +60,23 @@ mod tests{
     }
 
     #[test]
-    fn is_reading_all_shakespeare(){
+    fn reading_all_shakespeare(){
         let (a,b) = import_shakespeare(0.9);
         assert!(a.starts_with("First Citizen:"));
         assert!(b.ends_with("Whiles thou art waking.\n"));
+    }
+
+    #[test]
+    fn finding_all_characters_in_names(){
+        let (a,_) = import_names(0.9);
+        let charset = CharSet::from_str_vec(&a);
+        assert_eq!(charset.size(), 26);
+    }
+
+    #[test]
+    fn finding_all_characters_in_shakespeare(){
+        let (a,_) = import_shakespeare(0.9);
+        let charset = CharSet::from_str(&a).unwrap();
+        assert_eq!(charset.size(), 65);
     }
 }
