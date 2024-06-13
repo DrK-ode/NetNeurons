@@ -1,15 +1,11 @@
 use std::str::FromStr;
 
-use retext::data_import::{import_names, import_shakespeare};
+use retext::data_set::DataSet;
 
-use retext::bigram::CharSet;
+use retext::nnetwork::CharSet;
 
 fn main() {
-    let (data_training, _data_validate) = import_names(0.9);
-    let characters = CharSet::from_str_vec(&data_training);
-    println!("Characters present in names: {}", characters);
-    
-    let (data_training, _data_validate) = import_shakespeare(0.9);
-    let characters = CharSet::from_str(&data_training).unwrap();
-    println!("Characters present in Shakespeare: {}", characters);
+    let data_set = DataSet::new("./datasets/tiny_shakespeare.txt",0.9);
+    let characters = CharSet::from_str(data_set.get_training_data()).unwrap();
+    println!("Characters present in Shakespeare: {}", characters.to_string());
 }

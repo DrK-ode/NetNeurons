@@ -85,7 +85,7 @@ impl CharSet {
 
 impl Display for CharSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self._characters.iter().collect::<String>())
+        write!(f, "{}", self._characters.iter().collect::<String>().replace('\n', "\\n").replace(' ', "\\ ").replace('\t', "\\t"))
     }
 }
 
