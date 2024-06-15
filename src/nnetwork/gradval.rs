@@ -37,7 +37,7 @@ impl Gv {
         }
     }
 }
-impl From<f32> for Gv{
+impl From<f32> for Gv {
     fn from(value: f32) -> Self {
         Gv {
             _val: value,
@@ -59,31 +59,19 @@ impl PartialOrd for Gv {
 }
 
 // Back propagation
-impl Gv{
+impl Gv {
     fn reset_grad_recursively(&mut self) {
         self._grad = None;
         match &self._op {
             GradValOp::Noop => {}
-            GradValOp::Neg(a) => a.borrow_mut().reset_grad_recursively(),
-            GradValOp::Exp(a) => a.borrow_mut().reset_grad_recursively(),
-            GradValOp::Log(a) => a.borrow_mut().reset_grad_recursively(),
-            GradValOp::Pow(a, b) => {
-                a.borrow_mut().reset_grad_recursively();
-                b.borrow_mut().reset_grad_recursively();
+            GradValOp::Neg(a) | GradValOp::Exp(a) | GradValOp::Log(a) => {
+                a.borrow_mut().reset_grad_recursively()
             }
-            GradValOp::Add(a, b) => {
-                a.borrow_mut().reset_grad_recursively();
-                b.borrow_mut().reset_grad_recursively();
-            }
-            GradValOp::Sub(a, b) => {
-                a.borrow_mut().reset_grad_recursively();
-                b.borrow_mut().reset_grad_recursively();
-            }
-            GradValOp::Mul(a, b) => {
-                a.borrow_mut().reset_grad_recursively();
-                b.borrow_mut().reset_grad_recursively();
-            }
-            GradValOp::Div(a, b) => {
+            GradValOp::Pow(a, b)
+            | GradValOp::Add(a, b)
+            | GradValOp::Sub(a, b)
+            | GradValOp::Mul(a, b)
+            | GradValOp::Div(a, b) => {
                 a.borrow_mut().reset_grad_recursively();
                 b.borrow_mut().reset_grad_recursively();
             }
@@ -101,7 +89,7 @@ impl Gv{
         match &self._op {
             GradValOp::Noop => {}
             GradValOp::Neg(a) => {
-                a.borrow_mut().calc_grad_recursively(-1.0);
+                a.borrow_mut().calc_grad_recursively(-grad);
             }
             GradValOp::Exp(a) => {
                 let g = a.borrow()._val.exp();
@@ -115,6 +103,7 @@ impl Gv{
                 let a_val = a.borrow()._val;
                 let b_val = b.borrow()._val;
                 let g = b_val * a_val.powf(b_val - 1.);
+                println!("{} {}", g, grad);
                 a.borrow_mut().calc_grad_recursively(g * grad);
                 let g = a_val.ln() * a_val.powf(b_val);
                 b.borrow_mut().calc_grad_recursively(g * grad);
@@ -247,16 +236,24 @@ impl Div for &GradVal {
 // Additional operators
 impl GradVal {
     pub fn exp(&self) -> Self {
-        GradVal::from_op(self._gv.borrow()._val.exp(), GradValOp::Exp(self._gv.clone()))
+        GradVal::from_op(
+            self._gv.borrow()._val.exp(),
+            GradValOp::Exp(self._gv.clone()),
+        )
     }
 
     pub fn log(&self) -> Self {
-        GradVal::from_op(self._gv.borrow()._val.ln(), GradValOp::Log(self._gv.clone()))
+        GradVal::from_op(
+            self._gv.borrow()._val.ln(),
+            GradValOp::Log(self._gv.clone()),
+        )
     }
 
     pub fn pow(&self, other: &Self) -> Self {
-        GradVal::from_op(self._gv.borrow()._val.powf(other._gv.borrow()._val),
-                GradValOp::Pow(self._gv.clone(), other._gv.clone()) )
+        GradVal::from_op(
+            self._gv.borrow()._val.powf(other._gv.borrow()._val),
+            GradValOp::Pow(self._gv.clone(), other._gv.clone()),
+        )
     }
 }
 

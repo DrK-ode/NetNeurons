@@ -81,8 +81,8 @@ fn div_zero() {
 fn long_expression() {
     let a = &GradVal::from(1.0);
     let b = &GradVal::from(-1.0);
-    let c = &GradVal::from(2.0);
-    let d = &(&(a + b) - c);
+    let c = &GradVal::from(1.0);
+    let d = &(&(a + b) - &(c*&2_f32.into()));
     let z: GradVal = (-d).pow(&3_f32.into()).log().exp();
     assert_eq!(z, 8_f32.into());
 }
@@ -167,4 +167,28 @@ fn grad_div() {
     assert_eq!(z.grad(), Some(1.));
     assert_eq!(x.grad(), Some(0.25));
     assert_eq!(y.grad(), Some(-0.125));
+}
+
+#[test]
+fn long_grad() {
+    let a = &GradVal::from(1.0);
+    let b = &GradVal::from(-1.0);
+    let c = &GradVal::from(1.0);
+    let d = &(&(a + b) - &(c*&2_f32.into()) ); // = -2
+    let e = &(-d).pow(&3_f32.into()); // = 8
+    let f = &e.log(); // = log(8)
+    let mut g = f.exp(); // = 8
+
+    g.backward();
+
+    assert_eq!(g.grad(), Some(1.0));
+    assert_eq!(f.grad(), Some(8.));
+    assert_eq!(e.grad(), Some(1.0));
+    assert_eq!(d.grad(), Some(-12.0));
+    assert_eq!(a.grad(), Some(-12.));
+    assert_eq!(b.grad(), Some(-12.));
+    assert_eq!(c.grad(), Some(24.));
+    
+    
+    
 }
