@@ -300,11 +300,16 @@ impl GradVal {
         GradVal::from_op(f32::from(self).ln(), GradValOp::Log(self._gv.clone()))
     }
 
-    pub fn pow(&self, other: &Self) -> Self {
+    pub fn pow(&self, other: &GradVal) -> Self {
         GradVal::from_op(
             f32::from(self).powf(other._gv.borrow()._val),
             GradValOp::Pow(self._gv.clone(), other._gv.clone()),
         )
+    }
+
+    pub fn powf(&self, other: f32) -> Self {
+        let other = GradVal::from(other);
+        return self.pow(&other);
     }
 }
 

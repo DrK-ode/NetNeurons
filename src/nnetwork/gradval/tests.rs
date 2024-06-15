@@ -83,7 +83,7 @@ fn long_expression() {
     let b = &GradVal::from(-1.0);
     let c = &GradVal::from(1.0);
     let d = &(&(a + b) - &(c*&2_f32.into()));
-    let z: GradVal = (-d).pow(&3_f32.into()).log().exp();
+    let z: GradVal = (-d).powf(3.).log().exp();
     assert_eq!(z, 8_f32.into());
 }
 
@@ -175,7 +175,7 @@ fn long_grad() {
     let b = &GradVal::from(-1.0);
     let c = &GradVal::from(1.0);
     let d = &(&(a + b) - &(c*&2_f32.into()) ); // = -2
-    let e = &(-d).pow(&3_f32.into()); // = 8
+    let e = &(-d).powf(3.); // = 8
     let f = &e.log(); // = log(8)
     let mut g = f.exp(); // = 8
 
