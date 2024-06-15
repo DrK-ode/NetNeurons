@@ -4,15 +4,14 @@ use super::*;
 fn neg() {
     let x = &GradVal::from(1.);
     let y = -x;
-    assert_eq!(y, GradVal::from(-1.));
-    assert_eq!(y._gv.borrow()._op, GradValOp::Neg(x._gv.clone()));
+    assert_eq!(y.value(), -1.);
 }
 
 #[test]
 fn log() {
     let x = GradVal::from(1.);
     let z = x.log();
-    assert_eq!(z, 0_f32.into());
+    assert_eq!(z.value(), 0.);
     assert_eq!(z._gv.borrow()._op, GradValOp::Log(x._gv));
 }
 
@@ -20,7 +19,7 @@ fn log() {
 fn exp() {
     let x = GradVal::from(0.);
     let z = x.exp();
-    assert_eq!(z, 1_f32.into());
+    assert_eq!(z.value(), 1.);
     assert_eq!(z._gv.borrow()._op, GradValOp::Exp(x._gv));
 }
 
@@ -29,7 +28,7 @@ fn pow() {
     let x = GradVal::from(2.0);
     let y = GradVal::from(3.);
     let z = x.pow(&y);
-    assert_eq!(z, 8_f32.into());
+    assert_eq!(z.value(), 8.);
     assert_eq!(z._gv.borrow()._op, GradValOp::Pow(x._gv, y._gv));
 }
 
@@ -38,7 +37,7 @@ fn add() {
     let x = GradVal::from(1.0);
     let y = GradVal::from(2.0);
     let z = &x + &y;
-    assert_eq!(z, 3_f32.into());
+    assert_eq!(z.value(), 3.);
     assert_eq!(z._gv.borrow()._op, GradValOp::Add(x._gv, y._gv));
 }
 
@@ -47,8 +46,7 @@ fn sub() {
     let x = GradVal::from(1.0);
     let y = GradVal::from(2.0);
     let z = &x - &y;
-    assert_eq!(z, (-1_f32).into());
-    assert_eq!(z._gv.borrow()._op, GradValOp::Sub(x._gv, y._gv));
+    assert_eq!(z.value(), -1.);
 }
 
 #[test]
@@ -56,7 +54,7 @@ fn mul() {
     let x = GradVal::from(2.0);
     let y = GradVal::from(3.0);
     let z = &x * &y;
-    assert_eq!(z, 6_f32.into());
+    assert_eq!(z.value(), 6.);
     assert_eq!(z._gv.borrow()._op, GradValOp::Mul(x._gv, y._gv));
 }
 
@@ -65,8 +63,7 @@ fn div() {
     let x = GradVal::from(4.0);
     let y = GradVal::from(2.0);
     let z = &x / &y;
-    assert_eq!(z, 2_f32.into());
-    assert_eq!(z._gv.borrow()._op, GradValOp::Div(x._gv, y._gv));
+    assert_eq!(z.value(), 2.);
 }
 
 #[test]
@@ -84,7 +81,7 @@ fn long_expression() {
     let c = &GradVal::from(1.0);
     let d = &(&(a + b) - &(c*&2_f32.into()));
     let z: GradVal = (-d).powf(3.).log().exp();
-    assert_eq!(z, 8_f32.into());
+    assert_eq!(z.value(), 8.);
 }
 
 #[test]
@@ -188,7 +185,25 @@ fn long_grad() {
     assert_eq!(a.grad(), Some(-12.));
     assert_eq!(b.grad(), Some(-12.));
     assert_eq!(c.grad(), Some(24.));
-    
-    
-    
+}
+
+#[test]
+fn same_value_many_times() {
+    let a = &(&GradVal::from(3.0) - &GradVal::from(1.0));
+    let b = &GradVal::from(3.0);
+    let c = &(&(a*a) + b);
+    let d = &(&(c / a) + a);
+    let mut z = d*d;
+    z.backward();
+    assert_eq!(b.grad().unwrap(), 5.5);
+    assert_eq!(a.grad().unwrap(), 13.75);
+}
+
+#[test]
+fn equality() {
+    let a = &GradVal::from(1.0);
+    let b = &GradVal::from(1.0);
+    let c = a.clone();
+    assert_ne!(a._gv,b._gv);
+    assert_eq!(a._gv,c._gv);
 }
