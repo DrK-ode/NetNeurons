@@ -27,14 +27,8 @@ struct Gv {
     _op: GradValOp,
 }
 
+// Constructors
 impl Gv {
-    fn from_value(v: f32) -> Self {
-        Gv {
-            _val: v,
-            ..Self::default()
-        }
-    }
-
     fn from_op(v: f32, op: GradValOp) -> Self {
         Gv {
             _val: v,
@@ -42,7 +36,30 @@ impl Gv {
             ..Self::default()
         }
     }
+}
+impl From<f32> for Gv{
+    fn from(value: f32) -> Self {
+        Gv {
+            _val: value,
+            ..Self::default()
+        }
+    }
+}
 
+impl PartialEq for Gv {
+    fn eq(&self, other: &Self) -> bool {
+        self._val == other._val
+    }
+}
+
+impl PartialOrd for Gv {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self._val.partial_cmp(&other._val)
+    }
+}
+
+// Back propagation
+impl Gv{
     fn reset_grad_recursively(&mut self) {
         self._grad = None;
         match &self._op {
@@ -125,18 +142,6 @@ impl Gv {
     }
 }
 
-impl PartialEq for Gv {
-    fn eq(&self, other: &Self) -> bool {
-        self._val == other._val
-    }
-}
-
-impl PartialOrd for Gv {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self._val.partial_cmp(&other._val)
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct GradVal {
     _gv: Rc<RefCell<Gv>>,
@@ -144,60 +149,17 @@ pub struct GradVal {
 
 // Constructors
 impl GradVal {
-    pub fn from_value(v: f32) -> Self {
-        GradVal {
-            _gv: Rc::new(RefCell::new(Gv::from_value(v))),
-        }
-    }
-
     fn from_op(v: f32, op: GradValOp) -> Self {
         GradVal {
             _gv: Rc::new(RefCell::new(Gv::from_op(v, op))),
         }
     }
 }
-
-// Additional operators
-impl GradVal {
-    pub fn exp(&mut self) -> &Self {
-        let old_self = self.clone();
-        self._gv = Rc::new(RefCell::new(Gv::from_op(
-            old_self._gv.borrow()._val.exp(),
-            GradValOp::Exp(old_self._gv.clone()),
-        )));
-        self
-    }
-
-    pub fn log(&mut self) -> &Self {
-        let old_self = self.clone();
-        self._gv = Rc::new(RefCell::new(Gv::from_op(
-            old_self._gv.borrow()._val.ln(),
-            GradValOp::Log(old_self._gv.clone()),
-        )));
-        self
-    }
-
-    pub fn pow(&self, other: &Self) -> Self {
+impl From<f32> for GradVal {
+    fn from(value: f32) -> Self {
         GradVal {
-            _gv: Rc::new(RefCell::new(Gv::from_op(
-                RefCell::borrow(&self._gv)
-                    ._val
-                    .powf(RefCell::borrow(&other._gv)._val),
-                GradValOp::Pow(self._gv.clone(), other._gv.clone()),
-            ))),
+            _gv: Rc::new(RefCell::new(value.into())),
         }
-    }
-}
-
-// Backward propagation
-impl GradVal {
-    pub fn backward(&mut self) {
-        RefCell::borrow_mut(&self._gv).reset_grad_recursively();
-        RefCell::borrow_mut(&self._gv).calc_grad_recursively(1.);
-    }
-
-    pub fn grad(&self) -> Option<f32> {
-        self._gv.borrow()._grad
     }
 }
 
@@ -282,180 +244,33 @@ impl Div for &GradVal {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn neg() {
-        let x = &GradVal::from_value(1.);
-        let y = -x;
-        assert_eq!(y, GradVal::from_value(-1.));
-        assert_eq!(y._gv.borrow()._op, GradValOp::Neg(x._gv.clone()));
+// Additional operators
+impl GradVal {
+    pub fn exp(&self) -> Self {
+        GradVal::from_op(self._gv.borrow()._val.exp(), GradValOp::Exp(self._gv.clone()))
     }
 
-    #[test]
-    fn log() {
-        let mut x = GradVal::from_value(1.);
-        let y = x.clone();
-        x.log();
-        assert_eq!(x, GradVal::from_value(0.));
-        assert_eq!(x._gv.borrow()._op, GradValOp::Log(y._gv));
+    pub fn log(&self) -> Self {
+        GradVal::from_op(self._gv.borrow()._val.ln(), GradValOp::Log(self._gv.clone()))
     }
 
-    #[test]
-    fn exp() {
-        let mut x = GradVal::from_value(0.);
-        let y = x.clone();
-        x.exp();
-        assert_eq!(x, GradVal::from_value(1.));
-        assert_eq!(x._gv.borrow()._op, GradValOp::Exp(y._gv));
-    }
-
-    #[test]
-    fn pow() {
-        let x = GradVal::from_value(2.0);
-        let y = GradVal::from_value(3.);
-        let z = x.pow(&y);
-        assert_eq!(z, GradVal::from_value(8.));
-        assert_eq!(z._gv.borrow()._op, GradValOp::Pow(x._gv, y._gv));
-    }
-
-    #[test]
-    fn add() {
-        let x = GradVal::from_value(1.0);
-        let y = GradVal::from_value(2.0);
-        let z = &x + &y;
-        assert_eq!(z, GradVal::from_value(3.0));
-        assert_eq!(z._gv.borrow()._op, GradValOp::Add(x._gv, y._gv));
-    }
-
-    #[test]
-    fn sub() {
-        let x = GradVal::from_value(1.0);
-        let y = GradVal::from_value(2.0);
-        let z = &x - &y;
-        assert_eq!(z, GradVal::from_value(-1.0));
-        assert_eq!(z._gv.borrow()._op, GradValOp::Sub(x._gv, y._gv));
-    }
-
-    #[test]
-    fn mul() {
-        let x = GradVal::from_value(2.0);
-        let y = GradVal::from_value(3.0);
-        let z = &x * &y;
-        assert_eq!(z, GradVal::from_value(6.0));
-        assert_eq!(z._gv.borrow()._op, GradValOp::Mul(x._gv, y._gv));
-    }
-
-    #[test]
-    fn div() {
-        let x = GradVal::from_value(4.0);
-        let y = GradVal::from_value(2.0);
-        let z = &x / &y;
-        assert_eq!(z, GradVal::from_value(2.0));
-        assert_eq!(z._gv.borrow()._op, GradValOp::Div(x._gv, y._gv));
-    }
-
-    #[test]
-    #[should_panic]
-    fn div_zero() {
-        let x = &GradVal::from_value(1.);
-        let y = &GradVal::from_value(0.);
-        let _ = x / y;
-    }
-
-    #[test]
-    fn long_expression() {
-        let a = &GradVal::from_value(1.0);
-        let b = &GradVal::from_value(2.0);
-        let c = &GradVal::from_value(3.0);
-        let p = &GradVal::from_value(3.0);
-        let z = (-&(&(a + c) - b)).pow(p);
-        assert_eq!(z, GradVal::from_value(-8.0));
-    }
-
-    #[test]
-    fn grad_neg() {
-        let x = GradVal::from_value(2.0);
-        let mut z = -&x;
-        z.backward();
-        assert_eq!(z.grad(), Some(1.));
-        assert_eq!(x.grad(), Some(-1.));
-    }
-
-    #[test]
-    fn grad_exp() {
-        let x = GradVal::from_value(2.0);
-        let mut z = x.clone();
-        z.exp();
-        z.backward();
-        assert_eq!(z.grad(), Some(1.));
-        assert_eq!(x.grad(), Some(2_f32.exp()));
-    }
-
-    #[test]
-    fn grad_log() {
-        let x = GradVal::from_value(2.0);
-        let mut z = x.clone();
-        z.log();
-        z.backward();
-        assert_eq!(z.grad(), Some(1.));
-        assert_eq!(x.grad(), Some(0.5));
-    }
-
-    #[test]
-    fn grad_pow() {
-        let x = GradVal::from_value(2.0);
-        let y = GradVal::from_value(3.0);
-        let mut z = x.pow(&y);
-        z.backward();
-        assert_eq!(z.grad(), Some(1.));
-        assert_eq!(x.grad(), Some(12.));
-        assert_eq!(y.grad(), Some(2_f32.ln() * 8.));
-    }
-
-    #[test]
-    fn grad_add() {
-        let x = GradVal::from_value(2.0);
-        let y = GradVal::from_value(3.0);
-        let mut z = &x + &y;
-        z.backward();
-        assert_eq!(z.grad(), Some(1.));
-        assert_eq!(x.grad(), Some(1.));
-        assert_eq!(y.grad(), Some(1.));
-    }
-
-    #[test]
-    fn grad_sub() {
-        let x = GradVal::from_value(2.0);
-        let y = GradVal::from_value(3.0);
-        let mut z = &x - &y;
-        z.backward();
-        assert_eq!(z.grad(), Some(1.));
-        assert_eq!(x.grad(), Some(1.));
-        assert_eq!(y.grad(), Some(-1.));
-    }
-
-    #[test]
-    fn grad_mul() {
-        let x = GradVal::from_value(2.0);
-        let y = GradVal::from_value(3.0);
-        let mut z = &x * &y;
-        z.backward();
-        assert_eq!(z.grad(), Some(1.));
-        assert_eq!(x.grad(), Some(3.));
-        assert_eq!(y.grad(), Some(2.));
-    }
-
-    #[test]
-    fn grad_div() {
-        let x = GradVal::from_value(2.0);
-        let y = GradVal::from_value(4.0);
-        let mut z = &x / &y;
-        z.backward();
-        assert_eq!(z.grad(), Some(1.));
-        assert_eq!(x.grad(), Some(0.25));
-        assert_eq!(y.grad(), Some(-0.125));
+    pub fn pow(&self, other: &Self) -> Self {
+        GradVal::from_op(self._gv.borrow()._val.powf(other._gv.borrow()._val),
+                GradValOp::Pow(self._gv.clone(), other._gv.clone()) )
     }
 }
+
+// Backward propagation
+impl GradVal {
+    pub fn backward(&mut self) {
+        RefCell::borrow_mut(&self._gv).reset_grad_recursively();
+        RefCell::borrow_mut(&self._gv).calc_grad_recursively(1.);
+    }
+
+    pub fn grad(&self) -> Option<f32> {
+        self._gv.borrow()._grad
+    }
+}
+
+#[cfg(test)]
+mod tests;
