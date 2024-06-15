@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    fmt::Display,
     ops::{Add, Div, Mul, Neg, Sub},
     rc::Rc,
 };
@@ -19,12 +20,49 @@ enum GradValOp {
     Mul(Ancestor, Ancestor),
     Div(Ancestor, Ancestor),
 }
+impl GradValOp {
+    fn op_symb(&self) -> &str {
+        match self {
+            GradValOp::Noop => "NOOP",
+            GradValOp::Neg(_) => "-",
+            GradValOp::Exp(_) => "exp",
+            GradValOp::Log(_) => "log",
+            GradValOp::Pow(_, _) => "^",
+            GradValOp::Add(_, _) => "+",
+            GradValOp::Sub(_, _) => "-",
+            GradValOp::Mul(_, _) => "*",
+            GradValOp::Div(_, _) => "/",
+        }
+    }
+}
+
+impl Display for GradValOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GradValOp::Noop => write!(f, "{}", self.op_symb()),
+            GradValOp::Neg(a) | GradValOp::Exp(a) | GradValOp::Log(a) => {
+                write!(f, "{}({:e})", self.op_symb(), a.borrow()._val)
+            }
+            GradValOp::Pow(a, b)
+            | GradValOp::Add(a, b)
+            | GradValOp::Sub(a, b)
+            | GradValOp::Mul(a, b)
+            | GradValOp::Div(a, b) => write!(
+                f,
+                "{:e} {} {:e}",
+                a.borrow()._val,
+                self.op_symb(),
+                b.borrow()._val
+            ),
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 struct Gv {
     _val: f32,
-    _grad: Option<f32>,
-    _op: GradValOp,
+    _grad: Option<f32>, // Partial derivative of root value having called backward() wrt. this value
+    _op: GradValOp,     // Operation which the value originated from
 }
 
 // Constructors
@@ -136,6 +174,20 @@ pub struct GradVal {
     _gv: Rc<RefCell<Gv>>,
 }
 
+impl Display for GradVal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[GVal: ")?;
+        if self._gv.borrow()._op != GradValOp::Noop {
+            write!(f, " {} = ", self._gv.borrow()._op)?;
+        }
+        write!(f, "{:e}", f32::from(self))?;
+        if self.grad().is_some() {
+            write!(f, ", ∇: {:e}", self.grad().unwrap())?;
+        }
+        write!(f,"]")
+    }
+}
+
 // Constructors
 impl GradVal {
     fn from_op(v: f32, op: GradValOp) -> Self {
@@ -149,6 +201,11 @@ impl From<f32> for GradVal {
         GradVal {
             _gv: Rc::new(RefCell::new(value.into())),
         }
+    }
+}
+impl From<&GradVal> for f32 {
+    fn from(gv: &GradVal) -> Self {
+        gv._gv.borrow()._val
     }
 }
 
@@ -236,22 +293,16 @@ impl Div for &GradVal {
 // Additional operators
 impl GradVal {
     pub fn exp(&self) -> Self {
-        GradVal::from_op(
-            self._gv.borrow()._val.exp(),
-            GradValOp::Exp(self._gv.clone()),
-        )
+        GradVal::from_op(f32::from(self).exp(), GradValOp::Exp(self._gv.clone()))
     }
 
     pub fn log(&self) -> Self {
-        GradVal::from_op(
-            self._gv.borrow()._val.ln(),
-            GradValOp::Log(self._gv.clone()),
-        )
+        GradVal::from_op(f32::from(self).ln(), GradValOp::Log(self._gv.clone()))
     }
 
     pub fn pow(&self, other: &Self) -> Self {
         GradVal::from_op(
-            self._gv.borrow()._val.powf(other._gv.borrow()._val),
+            f32::from(self).powf(other._gv.borrow()._val),
             GradValOp::Pow(self._gv.clone(), other._gv.clone()),
         )
     }
@@ -263,7 +314,10 @@ impl GradVal {
         RefCell::borrow_mut(&self._gv).reset_grad_recursively();
         RefCell::borrow_mut(&self._gv).calc_grad_recursively(1.);
     }
+}
 
+// Access functions
+impl GradVal {
     pub fn grad(&self) -> Option<f32> {
         self._gv.borrow()._grad
     }
