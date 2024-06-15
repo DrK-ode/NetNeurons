@@ -1,8 +1,5 @@
 use std::{
-    cell::RefCell,
-    fmt::Display,
-    ops::{Add, Div, Mul, Neg, Sub},
-    rc::Rc,
+    cell::RefCell, fmt::Display, iter::Sum, ops::{Add, Div, Mul, Neg, Sub}, rc::Rc
 };
 
 type Ancestor = Rc<RefCell<Gv>>;
@@ -275,6 +272,12 @@ impl Div for &GradVal {
             panic!("Division not defined for zero divider");
         }
         self * &other.powf(-1.)
+    }
+}
+
+impl Sum for GradVal{
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(GradVal::from(0.), |a,b| &a + &b )
     }
 }
 
