@@ -303,6 +303,10 @@ impl GradVal {
         let other = GradVal::from(other);
         return self.pow(&other);
     }
+
+    pub fn sigmoid(&self) -> Self {
+        &GradVal::from(1.) / &(&GradVal::from(1.) + &(-self).exp())
+    }
 }
 
 // Backward propagation
