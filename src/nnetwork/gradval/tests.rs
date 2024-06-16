@@ -45,7 +45,7 @@ fn add() {
 fn sub() {
     let x = GradVal::from(1.0);
     let y = GradVal::from(2.0);
-    let z = &x - &y;
+    let z = x - y;
     assert_eq!(z.value(), -1.);
 }
 
@@ -62,7 +62,7 @@ fn mul() {
 fn div() {
     let x = GradVal::from(4.0);
     let y = GradVal::from(2.0);
-    let z = &x / &y;
+    let z = x / y;
     assert_eq!(z.value(), 2.);
 }
 
@@ -75,11 +75,23 @@ fn div_zero() {
 }
 
 #[test]
+fn sum() {
+    let x = GradVal::from(1.0) + GradVal::from(2.0) + GradVal::from(3.0);
+    let y = GradVal::sum(&vec![
+        GradVal::from(1.0),
+        GradVal::from(2.0),
+        GradVal::from(3.0),
+    ]);
+    assert_eq!(x.value(), y.value());
+    assert_eq!(x.grad(), y.grad());
+}
+
+#[test]
 fn long_expression() {
     let a = &GradVal::from(1.0);
     let b = &GradVal::from(-1.0);
     let c = &GradVal::from(1.0);
-    let d = &(&(a + b) - &(c*&2_f32.into()));
+    let d = &(&(a + b) - &(c * &2_f32.into()));
     let z: GradVal = (-d).powf(3.).log().exp();
     assert_eq!(z.value(), 8.);
 }
@@ -171,7 +183,7 @@ fn long_grad() {
     let a = &GradVal::from(1.0);
     let b = &GradVal::from(-1.0);
     let c = &GradVal::from(1.0);
-    let d = &(&(a + b) - &(c*&2_f32.into()) ); // = -2
+    let d = &(&(a + b) - &(c * &2_f32.into())); // = -2
     let e = &(-d).powf(3.); // = 8
     let f = &e.log(); // = log(8)
     let mut g = f.exp(); // = 8
@@ -191,9 +203,9 @@ fn long_grad() {
 fn same_value_many_times() {
     let a = &(&GradVal::from(3.0) - &GradVal::from(1.0));
     let b = &GradVal::from(3.0);
-    let c = &(&(a*a) + b);
+    let c = &(&(a * a) + b);
     let d = &(&(c / a) + a);
-    let mut z = d*d;
+    let mut z = d * d;
     z.backward();
     assert_eq!(b.grad().unwrap(), 5.5);
     assert_eq!(a.grad().unwrap(), 13.75);
@@ -204,6 +216,6 @@ fn equality() {
     let a = &GradVal::from(1.0);
     let b = &GradVal::from(1.0);
     let c = a.clone();
-    assert_ne!(a._gv,b._gv);
-    assert_eq!(a._gv,c._gv);
+    assert_ne!(a._gv, b._gv);
+    assert_eq!(a._gv, c._gv);
 }

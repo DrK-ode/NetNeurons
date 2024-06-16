@@ -1,5 +1,9 @@
 use std::{
-    cell::RefCell, fmt::Display, iter::Sum, ops::{Add, Div, Mul, Neg, Sub}, rc::Rc
+    cell::RefCell,
+    fmt::Display,
+    iter::Sum,
+    ops::{Add, Div, Mul, Neg, Sub},
+    rc::Rc,
 };
 
 type Ancestor = Rc<RefCell<Gv>>;
@@ -13,6 +17,7 @@ enum GradValOp {
     Pow(Ancestor, Ancestor),
     Add(Ancestor, Ancestor),
     Mul(Ancestor, Ancestor),
+    Sum(Vec<Ancestor>)
 }
 impl GradValOp {
     fn op_symb(&self) -> &str {
@@ -23,6 +28,7 @@ impl GradValOp {
             GradValOp::Pow(_, _) => "^",
             GradValOp::Add(_, _) => "+",
             GradValOp::Mul(_, _) => "*",
+            GradValOp::Sum(_) => "sum"
         }
     }
 }
@@ -41,6 +47,9 @@ impl Display for GradValOp {
                 self.op_symb(),
                 b.borrow()._val
             ),
+            GradValOp::Sum(vec) => {
+                write!(f,"{}({})", self.op_symb(), vec.iter().map(|gv| gv.borrow()._val.to_string() + ", " ).collect::<String>() )
+            }
         }
     }
 }
@@ -81,57 +90,6 @@ impl From<f32> for Gv {
 
 // Back propagation
 impl Gv {
-    fn reset_grad_recursively(&mut self) {
-        self._grad = None;
-        match &self._op {
-            GradValOp::Noop => {}
-            GradValOp::Exp(a) | GradValOp::Log(a) => a.borrow_mut().reset_grad_recursively(),
-            GradValOp::Pow(a, b) | GradValOp::Add(a, b) | GradValOp::Mul(a, b) => {
-                a.borrow_mut().reset_grad_recursively();
-                b.borrow_mut().reset_grad_recursively();
-            }
-        }
-    }
-
-    fn calc_grad_recursively(&mut self, grad: f32) {
-        self._grad = Some(
-            match self._grad {
-                Some(g) => g,
-                None => 0.,
-            } + grad,
-        );
-        // Calc grad for children
-        match &self._op {
-            GradValOp::Noop => {}
-            GradValOp::Exp(a) => {
-                let g = self._val;
-                a.borrow_mut().calc_grad_recursively(g * grad);
-            }
-            GradValOp::Log(a) => {
-                let g = 1. / a.borrow()._val;
-                a.borrow_mut().calc_grad_recursively(g * grad);
-            }
-            GradValOp::Pow(a, b) => {
-                let a_val = a.borrow()._val;
-                let b_val = b.borrow()._val;
-                let g = b_val * a_val.powf(b_val - 1.);
-                a.borrow_mut().calc_grad_recursively(g * grad);
-                let g = a_val.ln() * a_val.powf(b_val);
-                b.borrow_mut().calc_grad_recursively(g * grad);
-            }
-            GradValOp::Add(a, b) => {
-                a.borrow_mut().calc_grad_recursively(grad);
-                b.borrow_mut().calc_grad_recursively(grad);
-            }
-            GradValOp::Mul(a, b) => {
-                let g = b.borrow()._val;
-                a.borrow_mut().calc_grad_recursively(g * grad);
-                let g = a.borrow()._val;
-                b.borrow_mut().calc_grad_recursively(g * grad);
-            }
-        }
-    }
-
     fn calc_grad(&self) {
         fn add_grad(gv: &Rc<RefCell<Gv>>, new_grad: f32) {
             let old_grad = gv.borrow()._grad.unwrap_or(0.);
@@ -167,6 +125,9 @@ impl Gv {
                 let g = a.borrow()._val;
                 add_grad(b, g * grad);
             }
+            GradValOp::Sum(vec) => {
+                vec.iter().for_each(|gv| add_grad(gv, grad));
+            },
         }
     }
 }
@@ -233,7 +194,26 @@ impl Neg for &GradVal {
     }
 }
 
+impl Neg for GradVal {
+    type Output = GradVal;
+
+    fn neg(self) -> Self::Output {
+        self * GradVal::from(-1.)
+    }
+}
+
 impl Add for &GradVal {
+    type Output = GradVal;
+
+    fn add(self, other: Self) -> Self::Output {
+        GradVal::from_op(
+            self.value() + other.value(),
+            GradValOp::Add(self._gv.clone(), other._gv.clone()),
+        )
+    }
+}
+
+impl Add for GradVal {
     type Output = GradVal;
 
     fn add(self, other: Self) -> Self::Output {
@@ -252,7 +232,26 @@ impl Sub for &GradVal {
     }
 }
 
+impl Sub for GradVal {
+    type Output = GradVal;
+
+    fn sub(self, other: Self) -> Self::Output {
+        self + (-other)
+    }
+}
+
 impl Mul for &GradVal {
+    type Output = GradVal;
+
+    fn mul(self, other: Self) -> Self::Output {
+        GradVal::from_op(
+            self.value() * other.value(),
+            GradValOp::Mul(self._gv.clone(), other._gv.clone()),
+        )
+    }
+}
+
+impl Mul for GradVal {
     type Output = GradVal;
 
     fn mul(self, other: Self) -> Self::Output {
@@ -275,9 +274,27 @@ impl Div for &GradVal {
     }
 }
 
-impl Sum for GradVal{
+impl Div for GradVal {
+    type Output = GradVal;
+
+    fn div(self, other: Self) -> Self::Output {
+        let divider = other.value();
+        if divider == 0. {
+            panic!("Division not defined for zero divider");
+        }
+        self * other.powf(-1.)
+    }
+}
+
+impl Sum for GradVal {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(GradVal::from(0.), |a,b| &a + &b )
+        //iter.fold(GradVal::from(0.), |a, b| &a + &b)
+        let mut result = 0.;
+        let vec: Vec<_> = iter.map(|value| {result += value.value(); value._gv.clone()} ).collect();
+        GradVal::from_op(
+            result,
+            GradValOp::Sum(vec),
+        )
     }
 }
 
@@ -310,17 +327,17 @@ impl GradVal {
     pub fn sigmoid(&self) -> Self {
         &GradVal::from(1.) / &(&GradVal::from(1.) + &(-self).exp())
     }
+
+    pub fn sum(vec: &Vec<GradVal>) -> GradVal {
+        GradVal::from_op(
+            vec.iter().fold(0., |acc, v| acc + v.value()),
+            GradValOp::Sum( vec.iter().map(|value| value._gv.clone()).collect()),
+        )
+    }
 }
 
 // Backward propagation
 impl GradVal {
-    // Recursive method is slower and might be removed soon
-    #[allow(dead_code)]
-    fn backward_recursively(&mut self) {
-        RefCell::borrow_mut(&self._gv).reset_grad_recursively();
-        RefCell::borrow_mut(&self._gv).calc_grad_recursively(1.);
-    }
-
     pub fn backward(&mut self) {
         fn collect_and_clear(
             gv: &Rc<RefCell<Gv>>,
@@ -340,6 +357,9 @@ impl GradVal {
                         collect_and_clear(&a, visited, gvs);
                         collect_and_clear(&b, visited, gvs);
                     }
+                    GradValOp::Sum(vec) => {
+                        vec.iter().for_each(|gv| collect_and_clear(gv, visited, gvs));
+                    },
                 }
                 gvs.push(gv.clone());
             }
