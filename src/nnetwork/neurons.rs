@@ -3,9 +3,9 @@ use std::iter::empty;
 use super::GradVal;
 use rand::Rng;
 
-trait Evaluatable {
-    fn eval(&self, x: &Vec<GradVal>) -> Vec<GradVal>;
-    fn parameters(&self) -> impl Iterator<Item=&GradVal>;
+pub trait Forward {
+    fn forward(&self, x: &Vec<GradVal>) -> Vec<GradVal>;
+    fn parameters(&self) -> Box<dyn Iterator<Item=&GradVal> + '_>;
 }
 
 pub struct BiasedNeuron {
@@ -51,13 +51,12 @@ impl LinearLayer {
     }
 }
 
-impl Evaluatable for LinearLayer{
-    fn eval(&self, prev: &Vec<GradVal>) -> Vec<GradVal> {
+impl Forward for LinearLayer{
+    fn forward(&self, prev: &Vec<GradVal>) -> Vec<GradVal> {
         self._neurons.iter().map(|n| n.eval(prev)).collect()
     }
-
-    fn parameters(&self) -> impl Iterator<Item=&GradVal> {
-        self._neurons.iter().map(|n| n.parameters() ).flatten()
+    fn parameters(&self) -> Box<dyn Iterator<Item=&GradVal> + '_> {
+        Box::new(self._neurons.iter().map(|n| n.parameters() ).flatten())
     }
 }
 
@@ -73,18 +72,17 @@ impl FunctionLayer{
     }
 }
 
-impl Evaluatable for FunctionLayer {
-    fn eval(&self, x: &Vec<GradVal>) -> Vec<GradVal> {
+impl Forward for FunctionLayer {
+    fn forward(&self, x: &Vec<GradVal>) -> Vec<GradVal> {
         x.iter().map(|n| (self._func)(n)).collect()
     }
-
-    fn parameters(&self) -> impl Iterator<Item=&GradVal> {
-        empty::<&GradVal>()
+    fn parameters(&self) -> Box<dyn Iterator<Item=&GradVal> + '_> {
+        Box::new(empty::<&GradVal>())
     }
 }
 
 pub struct MLP {
-    _layers: Vec<LinearLayer>,
+    _layers: Vec<Box<dyn Forward>>,
 }
 
 impl MLP {
@@ -95,18 +93,17 @@ impl MLP {
         for i in 0..n_layer{
             let n_in = if i == 0 {n_in} else {layer_size};
             let n_out = if i == n_layer-1 {n_out} else {layer_size};
-            mlp._layers.push(LinearLayer::new(n_in, n_out));
+            mlp._layers.push(Box::new(LinearLayer::new(n_in, n_out)));
         }
         mlp
     }
 }
 
-impl Evaluatable for MLP {
-    fn eval(&self, prev: &Vec<GradVal> ) -> Vec<GradVal> {
-        self._layers.iter().fold(prev.to_vec(), |a,b| b.eval(&a) )
+impl Forward for MLP {
+    fn forward(&self, prev: &Vec<GradVal> ) -> Vec<GradVal> {
+        self._layers.iter().fold(prev.to_vec(), |a,b| b.forward(&a) )
     }
-
-    fn parameters(&self) -> impl Iterator<Item=&GradVal> {
-        self._layers.iter().map(|l| l.parameters()).flatten()
+    fn parameters(&self) -> Box<dyn Iterator<Item=&GradVal> + '_> {
+        Box::new(self._layers.iter().map(|l| l.parameters()).flatten())
     }
 }
