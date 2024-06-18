@@ -1,7 +1,8 @@
 use std::iter::empty;
 
 use super::GradVal;
-use rand::Rng;
+use rand::prelude::*;
+use rand_distr::StandardNormal;
 
 pub trait Forward {
     fn forward(&self, x: &Vec<GradVal>) -> Vec<GradVal>;
@@ -17,7 +18,7 @@ impl BiasedNeuron {
     pub fn new(n_in: usize) -> BiasedNeuron {
         let mut neuron = BiasedNeuron {
             _w: Vec::with_capacity(n_in),
-            _b: GradVal::from(rand::thread_rng().gen::<f32>()),
+            _b: f32::into(thread_rng().sample(StandardNormal)),
         };
         for _ in 0..n_in {
             neuron

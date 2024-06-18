@@ -1,10 +1,8 @@
 use std::{fmt::Display, str::FromStr};
 
-use ndarray::Array2;
+type EncVec = Vec<f32>;
 
-type EncVec = Array2<f32>;
-
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum CharSetError {
     EncodingError(char),
     DecodingVectorError(EncVec),
@@ -36,8 +34,11 @@ impl CharSet {
         T: ToString,
     {
         let mut charset = CharSet::default();
-        vec.iter()
-            .for_each(|s| s.to_string().chars().for_each(|c| {charset.add_character(c);}));
+        vec.iter().for_each(|s| {
+            s.to_string().chars().for_each(|c| {
+                charset.add_character(c);
+            })
+        });
         charset._characters.sort();
         charset
     }
@@ -48,8 +49,9 @@ impl CharSet {
 
     pub fn decode(&self, vector: &EncVec) -> Result<char, CharSetError> {
         let index: Vec<usize> = vector
-            .column(0)
-            .indexed_iter()
+            //.column(0)
+            .iter()
+            .enumerate()
             .filter_map(|(n, &elem)| if elem > 0. { Some(n) } else { None })
             .collect();
         if index.len() != 1 {
@@ -73,8 +75,8 @@ impl CharSet {
             .iter()
             .position(|k| c == *k)
             .ok_or_else(|| CharSetError::EncodingError(c))?;
-        let mut vector = Array2::zeros((self._characters.len(), 1 as usize));
-        vector[[n, 0]] = 1.0;
+        let mut vector = vec![0.; self._characters.len()];
+        vector[n] = 1.;
         Ok(vector)
     }
 
@@ -85,7 +87,16 @@ impl CharSet {
 
 impl Display for CharSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self._characters.iter().collect::<String>().replace('\n', "\\n").replace(' ', "\\ ").replace('\t', "\\t"))
+        write!(
+            f,
+            "{}",
+            self._characters
+                .iter()
+                .collect::<String>()
+                .replace('\n', "\\n")
+                .replace(' ', "\\ ")
+                .replace('\t', "\\t")
+        )
     }
 }
 
@@ -115,8 +126,6 @@ impl FromIterator<char> for CharSet {
 
 #[cfg(test)]
 mod tests {
-    use ndarray::arr2;
-
     use super::*;
 
     #[test]
@@ -128,7 +137,7 @@ mod tests {
     fn encode_a() {
         assert_eq!(
             CharSet::from_str("abc").unwrap().encode('a').unwrap(),
-            arr2(&[[1.], [0.], [0.]])
+            vec![1., 0., 0.]
         );
     }
 
@@ -136,7 +145,7 @@ mod tests {
     fn encode_c() {
         assert_eq!(
             CharSet::from_str("abc").unwrap().encode('c').unwrap(),
-            arr2(&[[0.], [0.], [1.]])
+            vec![0., 0., 1.]
         );
     }
 
@@ -148,9 +157,9 @@ mod tests {
                 .encode_string("abc")
                 .unwrap(),
             vec!(
-                arr2(&[[1.], [0.], [0.]]),
-                arr2(&[[0.], [1.], [0.]]),
-                arr2(&[[0.], [0.], [1.]])
+                vec![1., 0., 0.],
+                vec![0., 1., 0.],
+                vec![0., 0., 1.]
             )
         );
     }
@@ -160,16 +169,17 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .decode(&arr2(&[[1.], [1.], [0.]])),
-            Err(CharSetError::DecodingVectorError(arr2(&[[1.], [1.], [0.]]))));
+                .decode(&vec![1., 1., 0.]),
+            Err(CharSetError::DecodingVectorError(vec![1., 1., 0.]))
+        );
     }
-    
+
     #[test]
     fn decode_a() {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .decode(&arr2(&[[1.], [0.], [0.]]))
+                .decode(&vec![1., 0., 0.])
                 .unwrap(),
             'a'
         );
@@ -180,7 +190,7 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .decode(&arr2(&[[0.], [0.], [1.]]))
+                .decode(&vec![0., 0., 1.])
                 .unwrap(),
             'c'
         );
@@ -192,9 +202,9 @@ mod tests {
             CharSet::from_str("abc")
                 .unwrap()
                 .decode_string(vec!(
-                    arr2(&[[1.], [0.], [0.]]),
-                    arr2(&[[0.], [1.], [0.]]),
-                    arr2(&[[0.], [0.], [1.]])
+                    vec![1., 0., 0.],
+                    vec![0., 1., 0.],
+                    vec![0., 0., 1.]
                 ))
                 .unwrap(),
             "abc"
@@ -208,9 +218,9 @@ mod tests {
                 .unwrap()
                 .add_character('a')
                 .decode_string(vec!(
-                    arr2(&[[1.], [0.], [0.]]),
-                    arr2(&[[0.], [1.], [0.]]),
-                    arr2(&[[0.], [0.], [1.]])
+                    vec![1., 0., 0.],
+                    vec![0., 1., 0.],
+                    vec![0., 0., 1.]
                 ))
                 .unwrap(),
             "bca"
@@ -225,9 +235,9 @@ mod tests {
                 .add_character('a')
                 .sort()
                 .decode_string(vec!(
-                    arr2(&[[1.], [0.], [0.]]),
-                    arr2(&[[0.], [1.], [0.]]),
-                    arr2(&[[0.], [0.], [1.]])
+                    vec![1., 0., 0.],
+                    vec![0., 1., 0.],
+                    vec![0., 0., 1.]
                 ))
                 .unwrap(),
             "abc"
