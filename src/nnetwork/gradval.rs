@@ -17,7 +17,7 @@ enum GradValOp {
     Pow(Ancestor, Ancestor),
     Add(Ancestor, Ancestor),
     Mul(Ancestor, Ancestor),
-    Sum(Vec<Ancestor>)
+    Sum(Vec<Ancestor>),
 }
 impl GradValOp {
     fn op_symb(&self) -> &str {
@@ -28,7 +28,7 @@ impl GradValOp {
             GradValOp::Pow(_, _) => "^",
             GradValOp::Add(_, _) => "+",
             GradValOp::Mul(_, _) => "*",
-            GradValOp::Sum(_) => "sum"
+            GradValOp::Sum(_) => "sum",
         }
     }
 }
@@ -48,7 +48,14 @@ impl Display for GradValOp {
                 b.borrow()._val
             ),
             GradValOp::Sum(vec) => {
-                write!(f,"{}({})", self.op_symb(), vec.iter().map(|gv| gv.borrow()._val.to_string() + ", " ).collect::<String>() )
+                write!(
+                    f,
+                    "{}({})",
+                    self.op_symb(),
+                    vec.iter()
+                        .map(|gv| gv.borrow()._val.to_string() + ", ")
+                        .collect::<String>()
+                )
             }
         }
     }
@@ -127,7 +134,7 @@ impl Gv {
             }
             GradValOp::Sum(vec) => {
                 vec.iter().for_each(|gv| add_grad(gv, grad));
-            },
+            }
         }
     }
 }
@@ -172,19 +179,17 @@ impl From<&GradVal> for f32 {
     }
 }
 
-/*impl PartialEq for GradVal {
+impl PartialEq for GradVal {
     fn eq(&self, other: &Self) -> bool {
-        RefCell::borrow(&self._gv)._val == RefCell::borrow(&other._gv)._val
+        self.value() == other.value()
     }
 }
 
 impl PartialOrd for GradVal {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        RefCell::borrow(&self._gv)
-            ._val
-            .partial_cmp(&RefCell::borrow(&other._gv)._val)
+        self.value().partial_cmp(&other.value())
     }
-}*/
+}
 
 impl Neg for &GradVal {
     type Output = GradVal;
@@ -290,11 +295,13 @@ impl Sum for GradVal {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         //iter.fold(GradVal::from(0.), |a, b| &a + &b)
         let mut result = 0.;
-        let vec: Vec<_> = iter.map(|value| {result += value.value(); value._gv.clone()} ).collect();
-        GradVal::from_op(
-            result,
-            GradValOp::Sum(vec),
-        )
+        let vec: Vec<_> = iter
+            .map(|value| {
+                result += value.value();
+                value._gv.clone()
+            })
+            .collect();
+        GradVal::from_op(result, GradValOp::Sum(vec))
     }
 }
 
@@ -331,7 +338,7 @@ impl GradVal {
     pub fn sum(vec: &Vec<GradVal>) -> GradVal {
         GradVal::from_op(
             vec.iter().fold(0., |acc, v| acc + v.value()),
-            GradValOp::Sum( vec.iter().map(|value| value._gv.clone()).collect()),
+            GradValOp::Sum(vec.iter().map(|value| value._gv.clone()).collect()),
         )
     }
 }
@@ -358,8 +365,9 @@ impl GradVal {
                         collect_and_clear(&b, visited, gvs);
                     }
                     GradValOp::Sum(vec) => {
-                        vec.iter().for_each(|gv| collect_and_clear(gv, visited, gvs));
-                    },
+                        vec.iter()
+                            .for_each(|gv| collect_and_clear(gv, visited, gvs));
+                    }
                 }
                 gvs.push(gv.clone());
             }
