@@ -125,3 +125,20 @@ impl Forward for MLP {
         Box::new(self._layers.iter().map(|l| l.parameters()).flatten())
     }
 }
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+
+    #[test]
+    fn layer_forward(){
+        let mut layer = LinearLayer::new(2, 2, true);
+        layer._neurons[0]._w = vec![GradVal::from(1.0), GradVal::from(2.0)];
+        layer._neurons[1]._w = vec![GradVal::from(4.0), GradVal::from(5.0)];
+        layer._neurons[0]._b = Some(GradVal::from(3.0));
+        layer._neurons[1]._b = Some(GradVal::from(6.0));
+        let input = vec![GradVal::from(1.0), GradVal::from(2.0)];
+        let output = layer.forward(&input);
+        assert_eq!(output, vec![GradVal::from(1.+4.+3.), GradVal::from(4.+10.+6.)]);
+    }
+}
