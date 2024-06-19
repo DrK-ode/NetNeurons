@@ -6,19 +6,23 @@ use rand_distr::StandardNormal;
 
 pub trait Forward {
     fn forward(&self, x: &Vec<GradVal>) -> Vec<GradVal>;
-    fn parameters(&self) -> Box<dyn Iterator<Item=&GradVal> + '_>;
+    fn parameters(&self) -> Box<dyn Iterator<Item = &GradVal> + '_>;
 }
 
-pub struct BiasedNeuron {
+pub struct Neuron {
     _w: Vec<GradVal>,
-    _b: GradVal,
+    _b: Option<GradVal>,
 }
 
-impl BiasedNeuron {
-    pub fn new(n_in: usize) -> BiasedNeuron {
-        let mut neuron = BiasedNeuron {
+impl Neuron {
+    pub fn new(n_in: usize, biased: bool) -> Neuron {
+        let mut neuron = Neuron {
             _w: Vec::with_capacity(n_in),
-            _b: f32::into(thread_rng().sample(StandardNormal)),
+            _b: if biased {
+                Some(f32::into(thread_rng().sample(StandardNormal)))
+            } else {
+                None
+            },
         };
         for _ in 0..n_in {
             neuron
@@ -28,36 +32,48 @@ impl BiasedNeuron {
         neuron
     }
     pub fn eval(&self, prev: &Vec<GradVal>) -> GradVal {
-        &self._w.iter().zip(prev.iter()).map(|(w, p)| w * p).sum() + &self._b
+        let mut result = self._w.iter().zip(prev.iter()).map(|(w, p)| w * p).sum();
+        if self._b.is_some() {
+            result = &result + self._b.as_ref().unwrap();
+        }
+        result
     }
 
-    pub fn parameters(&self) -> impl Iterator<Item=&GradVal> {
-        self._w.iter().chain( std::iter::once(&self._b) )
+    pub fn parameters(&self) -> Box<dyn Iterator<Item = &GradVal> + '_> {
+        if self._b.is_some() {
+            Box::new(
+                self._w
+                    .iter()
+                    .chain(std::iter::once(self._b.as_ref().unwrap())),
+            )
+        } else {
+            Box::new(self._w.iter())
+        }
     }
 }
 
 pub struct LinearLayer {
-    _neurons: Vec<BiasedNeuron>,
+    _neurons: Vec<Neuron>,
 }
 
 impl LinearLayer {
-    pub fn new(n_in: usize, n_out: usize) -> LinearLayer {
+    pub fn new(n_in: usize, n_out: usize, biased: bool) -> LinearLayer {
         let mut layer = LinearLayer {
             _neurons: Vec::with_capacity(n_out),
         };
         for _ in 0..n_out {
-            layer._neurons.push(BiasedNeuron::new(n_in));
+            layer._neurons.push(Neuron::new(n_in, biased));
         }
         layer
     }
 }
 
-impl Forward for LinearLayer{
+impl Forward for LinearLayer {
     fn forward(&self, prev: &Vec<GradVal>) -> Vec<GradVal> {
         self._neurons.iter().map(|n| n.eval(prev)).collect()
     }
-    fn parameters(&self) -> Box<dyn Iterator<Item=&GradVal> + '_> {
-        Box::new(self._neurons.iter().map(|n| n.parameters() ).flatten())
+    fn parameters(&self) -> Box<dyn Iterator<Item = &GradVal> + '_> {
+        Box::new(self._neurons.iter().map(|n| n.parameters()).flatten())
     }
 }
 
@@ -65,11 +81,9 @@ pub struct FunctionLayer {
     _func: &'static dyn Fn(&GradVal) -> GradVal,
 }
 
-impl FunctionLayer{
-    pub fn new( f: &'static dyn Fn(&GradVal) -> GradVal ) -> FunctionLayer {
-        FunctionLayer{
-        _func: f,
-        }
+impl FunctionLayer {
+    pub fn new(f: &'static dyn Fn(&GradVal) -> GradVal) -> FunctionLayer {
+        FunctionLayer { _func: f }
     }
 }
 
@@ -77,7 +91,7 @@ impl Forward for FunctionLayer {
     fn forward(&self, x: &Vec<GradVal>) -> Vec<GradVal> {
         x.iter().map(|n| (self._func)(n)).collect()
     }
-    fn parameters(&self) -> Box<dyn Iterator<Item=&GradVal> + '_> {
+    fn parameters(&self) -> Box<dyn Iterator<Item = &GradVal> + '_> {
         Box::new(empty::<&GradVal>())
     }
 }
@@ -91,20 +105,23 @@ impl MLP {
         let mut mlp = MLP {
             _layers: Vec::with_capacity(n_layer),
         };
-        for i in 0..n_layer{
-            let n_in = if i == 0 {n_in} else {layer_size};
-            let n_out = if i == n_layer-1 {n_out} else {layer_size};
-            mlp._layers.push(Box::new(LinearLayer::new(n_in, n_out)));
+        for i in 0..n_layer {
+            let n_in = if i == 0 { n_in } else { layer_size };
+            let n_out = if i == n_layer - 1 { n_out } else { layer_size };
+            mlp._layers.push(Box::new(LinearLayer::new(n_in, n_out, true)));
+            mlp._layers.push(Box::new(FunctionLayer::new( &GradVal::sigmoid)) );
         }
         mlp
     }
 }
 
 impl Forward for MLP {
-    fn forward(&self, prev: &Vec<GradVal> ) -> Vec<GradVal> {
-        self._layers.iter().fold(prev.to_vec(), |a,b| b.forward(&a) )
+    fn forward(&self, prev: &Vec<GradVal>) -> Vec<GradVal> {
+        self._layers
+            .iter()
+            .fold(prev.to_vec(), |a, b| b.forward(&a))
     }
-    fn parameters(&self) -> Box<dyn Iterator<Item=&GradVal> + '_> {
+    fn parameters(&self) -> Box<dyn Iterator<Item = &GradVal> + '_> {
         Box::new(self._layers.iter().map(|l| l.parameters()).flatten())
     }
 }
