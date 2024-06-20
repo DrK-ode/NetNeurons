@@ -1,11 +1,11 @@
-use std::iter::empty;
+use std::{fmt::Display, iter::empty, ops::Deref};
 
 use super::GradVal;
 use rand::prelude::*;
 use rand_distr::StandardNormal;
 
 pub trait Forward {
-    fn forward(&self, x: &Vec<GradVal>) -> Vec<GradVal>;
+    fn forward(&self, x: &NnVec) -> NnVec;
 }
 
 pub trait Parameters {
@@ -14,7 +14,7 @@ pub trait Parameters {
     }
 }
 
-pub trait Layer: Forward + Parameters {
+pub trait Layer: Forward + Parameters + Display {
     fn neurons(&self) -> Option<&Vec<Neuron>> {
         None
     }
@@ -75,7 +75,7 @@ impl Neuron {
         self._w.len()
     }
 
-    pub fn eval(&self, prev: &Vec<GradVal>) -> GradVal {
+    pub fn eval(&self, prev: &NnVec) -> GradVal {
         let mut result = self._w.iter().zip(prev.iter()).map(|(w, p)| w * p).sum();
         if self._b.is_some() {
             result = &result + self._b.as_ref().unwrap();
@@ -93,6 +93,48 @@ impl Neuron {
         } else {
             Box::new(self._w.iter())
         }
+    }
+}
+
+impl Display for Neuron {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for w in &self._w {
+            write!(f, "{w}, ")?;
+        }
+        if let Some(ref bias) = self._b {
+            write!(f, "bias: {bias}")?;
+        }
+        writeln!(f, "]")
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct NnVec {
+    _values: Vec<GradVal>,
+}
+
+impl NnVec {
+    pub fn from_vec(values: Vec<GradVal>) -> NnVec {
+        NnVec { _values: values }
+    }
+}
+
+impl Deref for NnVec {
+    type Target = Vec<GradVal>;
+
+    fn deref(&self) -> &Self::Target {
+        &self._values
+    }
+}
+
+impl Display for NnVec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "NnVec: [")?;
+        for v in &self._values {
+            writeln!(f, "{v}")?;
+        }
+        writeln!(f, "]")
     }
 }
 
@@ -119,9 +161,19 @@ impl LinearLayer {
     }
 }
 
+impl Display for LinearLayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "LinearLayer: [")?;
+        for n in &self._neurons {
+            n.fmt(f)?;
+        }
+        writeln!(f, "]")
+    }
+}
+
 impl Forward for LinearLayer {
-    fn forward(&self, prev: &Vec<GradVal>) -> Vec<GradVal> {
-        self._neurons.iter().map(|n| n.eval(prev)).collect()
+    fn forward(&self, prev: &NnVec) -> NnVec {
+        NnVec::from_vec(self._neurons.iter().map(|n| n.eval(prev)).collect())
     }
 }
 impl Parameters for LinearLayer {
@@ -137,17 +189,27 @@ impl Layer for LinearLayer {
 
 pub struct FunctionLayer {
     _func: &'static dyn Fn(&GradVal) -> GradVal,
+    _label: String,
 }
 
 impl FunctionLayer {
-    pub fn new(f: &'static dyn Fn(&GradVal) -> GradVal) -> FunctionLayer {
-        FunctionLayer { _func: f }
+    pub fn new(f: &'static dyn Fn(&GradVal) -> GradVal, label: &str) -> FunctionLayer {
+        FunctionLayer {
+            _func: f,
+            _label: label.into(),
+        }
+    }
+}
+
+impl Display for FunctionLayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "FunctionLayer: [{:?}]", self._label)
     }
 }
 
 impl Forward for FunctionLayer {
-    fn forward(&self, x: &Vec<GradVal>) -> Vec<GradVal> {
-        x.iter().map(|n| (self._func)(n)).collect()
+    fn forward(&self, x: &NnVec) -> NnVec {
+        NnVec::from_vec(x.iter().map(|n| (self._func)(n)).collect())
     }
 }
 impl Parameters for FunctionLayer {
@@ -178,7 +240,7 @@ impl MLP {
             mlp._layers
                 .push(Box::new(LinearLayer::from_rand(n_in, n_out, true)));
             mlp._layers
-                .push(Box::new(FunctionLayer::new(&GradVal::sigmoid)));
+                .push(Box::new(FunctionLayer::new(&GradVal::sigmoid, "Sigmoid")));
         }
         mlp
     }
@@ -212,11 +274,21 @@ impl MLP {
     }
 }
 
+impl Display for MLP {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "MLP: [")?;
+        for layer in &self._layers {
+            layer.fmt(f)?;
+        }
+        writeln!(f, "]")
+    }
+}
+
 impl Forward for MLP {
-    fn forward(&self, prev: &Vec<GradVal>) -> Vec<GradVal> {
+    fn forward(&self, prev: &NnVec) -> NnVec {
         self._layers
             .iter()
-            .fold(prev.to_vec(), |a, b| b.forward(&a))
+            .fold(NnVec::from_vec(prev.to_vec()), |a, b| b.forward(&a))
     }
 }
 impl Parameters for MLP {
@@ -234,11 +306,11 @@ mod tests {
         let mut layer = LinearLayer::from_rand(2, 2, false);
         layer._neurons[0]._w = vec![GradVal::from(1.0), GradVal::from(2.0)];
         layer._neurons[1]._w = vec![GradVal::from(4.0), GradVal::from(5.0)];
-        let input = vec![GradVal::from(1.0), GradVal::from(2.0)];
+        let input = NnVec::from_vec(vec![GradVal::from(1.0), GradVal::from(2.0)]);
         let output = layer.forward(&input);
         assert_eq!(
             output,
-            vec![GradVal::from(1. + 4.), GradVal::from(4. + 10.)]
+            NnVec::from_vec(vec![GradVal::from(1. + 4.), GradVal::from(4. + 10.)])
         );
     }
 
@@ -249,11 +321,14 @@ mod tests {
         layer._neurons[1]._w = vec![GradVal::from(4.0), GradVal::from(5.0)];
         layer._neurons[0]._b = Some(GradVal::from(3.0));
         layer._neurons[1]._b = Some(GradVal::from(6.0));
-        let input = vec![GradVal::from(1.0), GradVal::from(2.0)];
+        let input = NnVec::from_vec(vec![GradVal::from(1.0), GradVal::from(2.0)]);
         let output = layer.forward(&input);
         assert_eq!(
             output,
-            vec![GradVal::from(1. + 4. + 3.), GradVal::from(4. + 10. + 6.)]
+            NnVec::from_vec(vec![
+                GradVal::from(1. + 4. + 3.),
+                GradVal::from(4. + 10. + 6.)
+            ])
         );
     }
 
@@ -274,8 +349,11 @@ mod tests {
             Neuron::from_value(1., 3, None),
             Neuron::from_value(1., 3, None),
         ])));
-        let input = vec![GradVal::from(1.0), GradVal::from(2.0)];
+        let input = NnVec::from_vec(vec![GradVal::from(1.0), GradVal::from(2.0)]);
         let output = mlp.forward(&input);
-        assert_eq!(output, vec![GradVal::from(27.0), GradVal::from(27.0)]);
+        assert_eq!(
+            output,
+            NnVec::from_vec(vec![GradVal::from(27.0), GradVal::from(27.0)])
+        );
     }
 }

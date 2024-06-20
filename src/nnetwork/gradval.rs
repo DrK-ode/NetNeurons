@@ -146,15 +146,11 @@ pub struct GradVal {
 
 impl Display for GradVal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[GVal: ")?;
-        if self._gv.borrow()._op != GradValOp::Noop {
-            write!(f, " {} = ", self._gv.borrow()._op)?;
+        write!(f, "({:e}", self.value() )?;
+        if let Some(g) = self.grad() {
+            write!(f, ", ∇: {:e}", g)?;
         }
-        write!(f, "{:e}", f32::from(self))?;
-        if self.grad().is_some() {
-            write!(f, ", ∇: {:e}", self.grad().unwrap())?;
-        }
-        write!(f, "]")
+        write!(f, ")")
     }
 }
 
