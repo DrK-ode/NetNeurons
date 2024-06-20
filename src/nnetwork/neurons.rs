@@ -44,7 +44,7 @@ impl Neuron {
         for _ in 0..n_in {
             neuron
                 ._w
-                .push(GradVal::from(rand::thread_rng().gen::<f32>()));
+                .push(f32::into(thread_rng().sample(StandardNormal)));
         }
         neuron
     }
