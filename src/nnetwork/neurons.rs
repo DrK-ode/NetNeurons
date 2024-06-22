@@ -1,4 +1,8 @@
-use std::{fmt::Display, iter::empty, ops::Deref};
+use std::{
+    fmt::Display,
+    iter::empty,
+    ops::{Deref, Div},
+};
 
 use super::GradVal;
 use rand::prelude::*;
@@ -135,6 +139,62 @@ impl Display for NnVec {
             writeln!(f, "{v}")?;
         }
         writeln!(f, "]")
+    }
+}
+
+pub enum LossType {
+    MaximumLikelihood,
+    LeastSquare,
+}
+
+impl From<Vec<GradVal>> for NnVec {
+    fn from(values: Vec<GradVal>) -> Self {
+        NnVec { _values: values }
+    }
+}
+
+impl FromIterator<GradVal> for NnVec {
+    fn from_iter<T: IntoIterator<Item = GradVal>>(iter: T) -> Self {
+        NnVec {
+            _values: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl NnVec {
+    pub fn size(&self) -> usize {
+        self._values.len()
+    }
+
+    pub fn sum(&self) -> GradVal {
+        GradVal::sum(&self._values)
+    }
+
+    pub fn loss(&self, formula: LossType, truth: &NnVec) -> GradVal {
+        assert_eq!(
+            self.size(),
+            truth.size(),
+            "Cannot compare non-equal sized NnVec"
+        );
+        match formula {
+            LossType::MaximumLikelihood => {
+                let exped: NnVec = self._values.iter().map(|v| v.exp()).collect();
+                let norm = exped.sum() / (exped.size() as f32).into();
+                exped
+                    .iter()
+                    .map(|v| v.div(&norm))
+                    .zip(truth.iter())
+                    .map(|(ref p, t)| (p * t).log())
+                    .sum::<GradVal>()
+                    .div((truth.size() as f32).into())
+            }
+            LossType::LeastSquare => self
+                .iter()
+                .zip(truth.iter())
+                .map(|(v, t)| (v - t).powf(2.))
+                .sum::<GradVal>()
+                .div((truth.size() as f32).into()),
+        }
     }
 }
 
