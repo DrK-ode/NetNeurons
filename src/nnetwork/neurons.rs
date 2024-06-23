@@ -169,33 +169,6 @@ impl NnVec {
     pub fn sum(&self) -> GradVal {
         GradVal::sum(&self._values)
     }
-
-    pub fn loss(&self, formula: LossType, truth: &NnVec) -> GradVal {
-        assert_eq!(
-            self.size(),
-            truth.size(),
-            "Cannot compare non-equal sized NnVec"
-        );
-        match formula {
-            LossType::MaximumLikelihood => {
-                let exped: NnVec = self._values.iter().map(|v| v.exp()).collect();
-                let norm = exped.sum() / (exped.size() as f32).into();
-                exped
-                    .iter()
-                    .map(|v| v.div(&norm))
-                    .zip(truth.iter())
-                    .map(|(ref p, t)| (p * t).log())
-                    .sum::<GradVal>()
-                    .div((truth.size() as f32).into())
-            }
-            LossType::LeastSquare => self
-                .iter()
-                .zip(truth.iter())
-                .map(|(v, t)| (v - t).powf(2.))
-                .sum::<GradVal>()
-                .div((truth.size() as f32).into()),
-        }
-    }
 }
 
 pub struct LinearLayer {
@@ -331,6 +304,39 @@ impl MLP {
     pub fn add_layer(&mut self, layer: Box<dyn Layer>) {
         self._layers.push(layer);
         Self::check_layers(&self._layers);
+    }
+
+    fn maximum_likelihood(output: &NnVec, truth: &NnVec) -> GradVal {
+        let exped: NnVec = output._values.iter().map(|v| v.exp()).collect();
+        let norm = exped.sum() / (exped.size() as f32).into();
+        exped
+            .iter()
+            .map(|v| v.div(&norm))
+            .zip(truth.iter())
+            .map(|(ref p, t)| (p * t).log())
+            .sum::<GradVal>()
+            .div((truth.size() as f32).into())
+    }
+
+    fn least_squares(output: &NnVec, truth: &NnVec) -> GradVal {
+        output
+                .iter()
+                .zip(truth.iter())
+                .map(|(v, t)| (v - t).powf(2.))
+                .sum::<GradVal>()
+                .div((truth.size() as f32).into())
+    }
+
+    pub fn loss(output: &NnVec, truth: &NnVec, formula: LossType) -> GradVal {
+        assert_eq!(
+            output.size(),
+            truth.size(),
+            "Cannot compare non-equal sized NnVec"
+        );
+        match formula {
+            LossType::MaximumLikelihood => MLP::maximum_likelihood(output, truth),
+            LossType::LeastSquare => MLP::least_squares(output, truth),
+        }
     }
 }
 
