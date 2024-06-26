@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     fmt::Display,
     iter::Sum,
-    ops::{Add, Div, Mul, Neg, Sub},
+    ops::{Add, Deref, Div, Mul, Neg, Sub},
     rc::Rc,
 };
 
@@ -146,7 +146,7 @@ pub struct GradVal {
 
 impl Display for GradVal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({:e}", self.value() )?;
+        write!(f, "({:e}", self.value())?;
         if let Some(g) = self.grad() {
             write!(f, ", ∇: {:e}", g)?;
         }
@@ -385,10 +385,70 @@ impl GradVal {
     pub fn value(&self) -> f32 {
         f32::from(self)
     }
+
+    pub fn set_value(&mut self, v: f32) {
+        self._gv.borrow_mut()._val = v;
+    }
+
     pub fn grad(&self) -> Option<f32> {
         self._gv.borrow()._grad
     }
 }
+
+// GradVal vector type
+#[derive(Debug, PartialEq)]
+pub struct GradValVec {
+    _values: Vec<GradVal>,
+}
+
+impl Deref for GradValVec {
+    type Target = Vec<GradVal>;
+
+    fn deref(&self) -> &Self::Target {
+        &self._values
+    }
+}
+
+impl Display for GradValVec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "NnVec: [")?;
+        for v in &self._values {
+            writeln!(f, "{v}")?;
+        }
+        writeln!(f, "]")
+    }
+}
+
+impl From<Vec<GradVal>> for GradValVec {
+    fn from(values: Vec<GradVal>) -> Self {
+        GradValVec { _values: values }
+    }
+}
+
+impl From<Vec<f32>> for GradValVec {
+    fn from(values: Vec<f32>) -> Self {
+        GradValVec { _values: values.iter().map(|&v| GradVal::from(v)).collect() }
+    }
+}
+
+impl FromIterator<GradVal> for GradValVec {
+    fn from_iter<T: IntoIterator<Item = GradVal>>(iter: T) -> Self {
+        GradValVec {
+            _values: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl GradValVec {
+    pub fn size(&self) -> usize {
+        self._values.len()
+    }
+
+    pub fn sum(&self) -> GradVal {
+        GradVal::sum(&self._values)
+    }
+}
+
 
 #[cfg(test)]
 mod tests;

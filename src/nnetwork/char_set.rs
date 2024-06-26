@@ -1,11 +1,11 @@
 use std::{fmt::Display, str::FromStr};
 
-type EncVec = Vec<f32>;
+use super::{GradVal, GradValVec};
 
 #[derive(Debug, PartialEq)]
 pub enum CharSetError {
     EncodingError(char),
-    DecodingVectorError(EncVec),
+    DecodingVectorError(Vec<f32>),
     DecodingIndexError(usize),
     CreationError,
 }
@@ -47,15 +47,17 @@ impl CharSet {
         self._characters.len()
     }
 
-    pub fn decode(&self, vector: &EncVec) -> Result<char, CharSetError> {
+    pub fn decode(&self, vector: &GradValVec) -> Result<char, CharSetError> {
         let index: Vec<usize> = vector
             //.column(0)
             .iter()
             .enumerate()
-            .filter_map(|(n, &elem)| if elem > 0. { Some(n) } else { None })
+            .filter_map(|(n, elem)| if elem.value() > 0. { Some(n) } else { None })
             .collect();
         if index.len() != 1 {
-            return Err(CharSetError::DecodingVectorError(vector.to_owned()));
+            return Err(CharSetError::DecodingVectorError(
+                vector.iter().map(|v| v.value()).collect(),
+            ));
         }
         let index = index[0];
         Ok(self
@@ -65,22 +67,22 @@ impl CharSet {
         .copied()
     }
 
-    pub fn decode_string(&self, v: Vec<EncVec>) -> Result<String, CharSetError> {
+    pub fn decode_string(&self, v: Vec<GradValVec>) -> Result<String, CharSetError> {
         v.iter().map(|v| self.decode(v)).collect()
     }
 
-    pub fn encode(&self, c: char) -> Result<EncVec, CharSetError> {
+    pub fn encode(&self, c: char) -> Result<GradValVec, CharSetError> {
         let n = self
             ._characters
             .iter()
             .position(|k| c == *k)
             .ok_or_else(|| CharSetError::EncodingError(c))?;
-        let mut vector = vec![0.; self._characters.len()];
-        vector[n] = 1.;
-        Ok(vector)
+        let mut vector = vec![GradVal::from(0.); self._characters.len()];
+        vector[n] = GradVal::from(1.);
+        Ok(vector.into())
     }
 
-    pub fn encode_string(&self, s: &str) -> Result<Vec<EncVec>, CharSetError> {
+    pub fn encode_string(&self, s: &str) -> Result<Vec<GradValVec>, CharSetError> {
         s.chars().map(|c| self.encode(c)).collect()
     }
 }
@@ -137,7 +139,7 @@ mod tests {
     fn encode_a() {
         assert_eq!(
             CharSet::from_str("abc").unwrap().encode('a').unwrap(),
-            vec![1., 0., 0.]
+            GradValVec::from(vec![1., 0., 0.])
         );
     }
 
@@ -145,7 +147,7 @@ mod tests {
     fn encode_c() {
         assert_eq!(
             CharSet::from_str("abc").unwrap().encode('c').unwrap(),
-            vec![0., 0., 1.]
+            GradValVec::from(vec![0., 0., 1.])
         );
     }
 
@@ -157,9 +159,9 @@ mod tests {
                 .encode_string("abc")
                 .unwrap(),
             vec!(
-                vec![1., 0., 0.],
-                vec![0., 1., 0.],
-                vec![0., 0., 1.]
+                GradValVec::from(vec![1., 0., 0.]),
+                GradValVec::from(vec![0., 1., 0.]),
+                GradValVec::from(vec![0., 0., 1.])
             )
         );
     }
@@ -167,9 +169,7 @@ mod tests {
     #[test]
     fn ambigious_decode() {
         assert_eq!(
-            CharSet::from_str("abc")
-                .unwrap()
-                .decode(&vec![1., 1., 0.]),
+            CharSet::from_str("abc").unwrap().decode(&vec![1., 1., 0.].into()),
             Err(CharSetError::DecodingVectorError(vec![1., 1., 0.]))
         );
     }
@@ -179,7 +179,7 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .decode(&vec![1., 0., 0.])
+                .decode(&vec![1., 0., 0.].into())
                 .unwrap(),
             'a'
         );
@@ -190,7 +190,7 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .decode(&vec![0., 0., 1.])
+                .decode(&vec![0., 0., 1.].into())
                 .unwrap(),
             'c'
         );
@@ -201,11 +201,7 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .decode_string(vec!(
-                    vec![1., 0., 0.],
-                    vec![0., 1., 0.],
-                    vec![0., 0., 1.]
-                ))
+                .decode_string(vec!(vec![1., 0., 0.].into(), vec![0., 1., 0.].into(), vec![0., 0., 1.].into()))
                 .unwrap(),
             "abc"
         );
@@ -217,11 +213,7 @@ mod tests {
             CharSet::from_str("bc")
                 .unwrap()
                 .add_character('a')
-                .decode_string(vec!(
-                    vec![1., 0., 0.],
-                    vec![0., 1., 0.],
-                    vec![0., 0., 1.]
-                ))
+                .decode_string(vec!(vec![1., 0., 0.].into(), vec![0., 1., 0.].into(), vec![0., 0., 1.].into()))
                 .unwrap(),
             "bca"
         );
@@ -234,11 +226,7 @@ mod tests {
                 .unwrap()
                 .add_character('a')
                 .sort()
-                .decode_string(vec!(
-                    vec![1., 0., 0.],
-                    vec![0., 1., 0.],
-                    vec![0., 0., 1.]
-                ))
+                .decode_string(vec!(vec![1., 0., 0.].into(), vec![0., 1., 0.].into(), vec![0., 0., 1.].into()))
                 .unwrap(),
             "abc"
         );
