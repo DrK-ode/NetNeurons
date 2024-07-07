@@ -6,6 +6,8 @@ use std::{
     rc::Rc,
 };
 
+use rand::prelude::*;
+
 type Ancestor = Rc<RefCell<Gv>>;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -310,7 +312,7 @@ impl GradVal {
     pub fn log(&self) -> Self {
         let arg = f32::from(self);
         if arg <= 0. {
-            panic!("Log not defined for arg <= 0");
+            panic!("Log not defined for arg <= 0, value provided was {arg}");
         }
         GradVal::from_op(arg.ln(), GradValOp::Log(self._gv.clone()))
     }
@@ -446,6 +448,26 @@ impl GradValVec {
 
     pub fn sum(&self) -> GradVal {
         GradVal::sum(&self._values)
+    }
+
+    pub fn normalize(&mut self){
+        let norm = self.sum();
+        self._values = self._values.iter().map(|v| v / &norm ).collect();
+    }
+
+    pub fn collapse(&mut self) -> &Self {
+        self.normalize();
+        let mut vec = vec![GradVal::from(0.); self.len()];
+        let mut rnd = rand::thread_rng().gen_range(0f32..1f32);
+        for (i,v) in self._values.iter().enumerate() {
+            rnd -= v.value();
+            if rnd <= 0. {
+                vec[i] = GradVal::from(1.);
+                break; 
+            }
+        }
+        self._values = vec;
+        self
     }
 }
 

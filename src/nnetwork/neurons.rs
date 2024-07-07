@@ -1,7 +1,4 @@
-use std::{
-    fmt::Display,
-    iter::empty, ops::Div,
-};
+use std::{fmt::Display, iter::empty, ops::Div};
 
 use super::{gradval::GradValVec, GradVal};
 use rand::prelude::*;
@@ -18,7 +15,7 @@ pub trait Parameters {
     }
 }
 
-pub trait Layer: Forward<Output=GradValVec> + Parameters + Display {
+pub trait Layer: Forward<Output = GradValVec> + Parameters + Display {
     fn neurons(&self) -> Option<&Vec<Neuron>> {
         None
     }
@@ -92,7 +89,7 @@ impl Neuron {
     }
 }
 
-impl Forward for Neuron{
+impl Forward for Neuron {
     type Output = GradVal;
     fn forward(&self, prev: &GradValVec) -> Self::Output {
         let mut result = self._w.iter().zip(prev.iter()).map(|(w, p)| w * p).sum();
@@ -152,7 +149,12 @@ impl Display for LinearLayer {
 impl Forward for LinearLayer {
     type Output = GradValVec;
     fn forward(&self, prev: &GradValVec) -> Self::Output {
-        GradValVec::from(self._neurons.iter().map(|n| n.forward(prev)).collect::<Vec<_>>())
+        GradValVec::from(
+            self._neurons
+                .iter()
+                .map(|n| n.forward(prev))
+                .collect::<Vec<_>>(),
+        )
     }
 }
 impl Parameters for LinearLayer {
@@ -200,7 +202,6 @@ pub enum LossType {
     LeastSquare,
 }
 
-
 pub struct MLP {
     _layers: Vec<Box<dyn Layer>>,
 }
@@ -224,6 +225,8 @@ impl MLP {
             mlp._layers
                 .push(Box::new(FunctionLayer::new(&GradVal::sigmoid, "Sigmoid")));
         }
+        mlp._layers
+            .push(Box::new(FunctionLayer::new(&GradVal::exp, "Exp")));
         mlp
     }
 
@@ -256,24 +259,24 @@ impl MLP {
     }
 
     fn maximum_likelihood(output: &GradValVec, truth: &GradValVec) -> GradVal {
-        let exped: GradValVec = output.iter().map(|v| v.exp()).collect();
-        let norm = exped.sum() / (exped.size() as f32).into();
+        let mut exped: GradValVec = output.iter().map(|v| v.exp()).collect();
+        exped.normalize();
         exped
             .iter()
-            .map(|v| v.div(&norm))
             .zip(truth.iter())
-            .map(|(ref p, t)| (p * t).log())
+            // This can't be right
+            .map(|(p, t)| (p * t).log())
             .sum::<GradVal>()
             .div((truth.size() as f32).into())
     }
 
     fn least_squares(output: &GradValVec, truth: &GradValVec) -> GradVal {
         output
-                .iter()
-                .zip(truth.iter())
-                .map(|(v, t)| (v - t).powf(2.))
-                .sum::<GradVal>()
-                .div((truth.size() as f32).into())
+            .iter()
+            .zip(truth.iter())
+            .map(|(v, t)| (v - t).powf(2.))
+            .sum::<GradVal>()
+            .div((truth.size() as f32).into())
     }
 
     pub fn loss(output: &GradValVec, truth: &GradValVec, formula: LossType) -> GradVal {
@@ -288,13 +291,19 @@ impl MLP {
         }
     }
 
-    pub fn decend_grad(&mut self, input_pairs: &Vec<(GradValVec,GradValVec)>, cycles: usize, learning_rate: f32) {
+    pub fn decend_grad(
+        &mut self,
+        input_pairs: &Vec<(GradValVec, GradValVec)>,
+        cycles: usize,
+        learning_rate: f32,
+    ) {
         for _ in 0..cycles {
             let mut losses: GradVal = input_pairs
                 .iter()
                 .map(|(inp, truth)| {
                     let out = self.forward(&inp);
-                    MLP::loss(&out, &truth, LossType::MaximumLikelihood)
+                    //MLP::loss(&out, &truth, LossType::MaximumLikelihood)
+                    MLP::loss(&out, &truth, LossType::LeastSquare)
                 })
                 .sum();
             losses.backward();

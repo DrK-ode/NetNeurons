@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use super::{CharSet, GradValVec, MLP};
+use super::{char_set::CharSetError, CharSet, Forward, GradValVec, MLP};
 use crate::data_set::DataSet;
 
 pub struct Bigram {
@@ -43,5 +43,23 @@ impl Bigram {
             cycles,
             learning_rate,
         );
+    }
+
+    pub fn predict(
+        &self,
+        seed_string: &str,
+        number_of_characters: usize,
+    ) -> Result<String, CharSetError> {
+        let mut s = seed_string.to_owned();
+        if s.len() == 0 {
+            panic!("Aborting, cannot extrapolate from empty string.")
+        }
+        let mut last_char = self._charset.encode(s.chars().last().unwrap())?;
+        for _ in 0..number_of_characters {
+            last_char = self._mlp.forward(&last_char);
+            last_char.collapse();
+            s.push(self._charset.decode(&last_char)?);
+        }
+        Ok(s)
     }
 }
