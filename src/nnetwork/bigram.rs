@@ -1,6 +1,8 @@
 use std::str::FromStr;
 
-use super::{char_set::CharSetError, CharSet, Forward, GradValVec, MLP};
+use super::{
+    char_set::CharSetError, CharSet, Forward, FunctionLayer, GradVal, GradValVec, LinearLayer, MLP
+};
 use crate::data_set::DataSet;
 
 pub struct Bigram {
@@ -13,10 +15,17 @@ impl Bigram {
     pub fn new(data: DataSet, number_of_layers: usize) -> Self {
         let chars = CharSet::from_str(data.get_training_data()).unwrap();
         let n_chars = chars.size();
+        let mut mlp = MLP::from_empty();
+
+        for _ in 0..number_of_layers {
+            mlp.add_layer(Box::new(LinearLayer::from_rand(n_chars, n_chars, true)));
+            mlp.add_layer(Box::new(FunctionLayer::new(&GradVal::sigmoid, "Sigmoid")));
+        }
+
         Bigram {
             _data: data,
             _charset: chars,
-            _mlp: MLP::new(number_of_layers, n_chars, n_chars, n_chars),
+            _mlp: mlp,
         }
     }
 
@@ -38,11 +47,13 @@ impl Bigram {
     }
 
     pub fn learn(&mut self, cycles: usize, learning_rate: f32, data_block_size: usize) {
-        self._mlp.decend_grad(
-            &self.extract_correlations(self._data.get_training_block(data_block_size)),
-            cycles,
-            learning_rate,
-        );
+        for n in 0..cycles {
+            let loss = self._mlp.decend_grad(
+                &self.extract_correlations(self._data.get_training_block(data_block_size)),
+                learning_rate,
+            );
+            println!("Cycle {n} loss: {:e}", loss.value());
+        }
     }
 
     pub fn predict(
