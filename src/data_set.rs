@@ -7,8 +7,8 @@ pub struct DataSet {
 }
 
 impl DataSet {
-    pub fn new(path: &str, training_ratio: f32) -> Self {
-        let the_data = Self::get_string_from_file(path);
+    pub fn new(path: &str, training_ratio: f32, lowercase: bool) -> Self {
+        let the_data = Self::get_string_from_file(path, lowercase);
         let training_len = Self::calc_training_len(the_data.len(), training_ratio);
         DataSet {
             the_data,
@@ -20,8 +20,9 @@ impl DataSet {
         (data_len as f32 * ratio) as usize
     }
 
-    fn get_string_from_file(path: &str) -> String {
-        let data = fs::read_to_string(path).and_then(|s| Ok(s.to_lowercase()));
+    fn get_string_from_file(path: &str, lowercase: bool) -> String {
+        let data =
+            fs::read_to_string(path).and_then(|s| if lowercase { Ok(s.to_lowercase()) } else { Ok(s) });
         if data.is_err() {
             panic!(
                 "Received {:?}  while importing dataset from {}.",
@@ -71,13 +72,13 @@ mod tests {
     use super::*;
 
     fn import_shakespeare() -> DataSet {
-        DataSet::new("./datasets/tiny_shakespeare.txt", 0.9)
+        DataSet::new("./datasets/tiny_shakespeare.txt", 0.9, false)
     }
 
     #[test]
     #[should_panic]
     fn wrong_path() {
-        DataSet::new("no dataset here", 0.9);
+        DataSet::new("no dataset here", 0.9, false);
     }
 
     #[test]
