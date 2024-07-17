@@ -5,9 +5,9 @@ fn main() {
     let data_set = DataSet::new("./datasets/tiny_shakespeare.txt", 1.0);
     let mut bigram_model = Bigram::new(data_set, 1);
     let cycles = 100;
-    let learning_rate = 5.;
+    let learning_rate = 10.;
     let data_block_size = 20;
-    let regularization = 0.01;
+    let regularization: Option<f32> = None;
     let prediction_seed = "Once upon a time ";
     let prediction_length = 100;
 

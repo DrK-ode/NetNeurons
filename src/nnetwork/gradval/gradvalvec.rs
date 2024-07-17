@@ -70,6 +70,15 @@ impl GradValVec {
         self.sum() / GradVal::from(self._values.len() as f32)
     }
 
+    // Ignores any term where the RHS is zero in order to reduce computations
+    pub fn filtered_dot(&self, other: &GradValVec) -> GradVal {
+        self._values
+            .iter()
+            .zip(other._values.iter())
+            .filter_map(|(a, b)| if b.value() != 0. {Some(a * b)} else {None})
+            .sum()
+    }
+
     pub fn dot(&self, other: &GradValVec) -> GradVal {
         self._values
             .iter()
@@ -92,7 +101,7 @@ impl GradValVec {
     }
 
     pub fn maximum_likelihood(&self, truth: &GradValVec) -> GradVal {
-        -self.dot(truth).log()
+        -self.filtered_dot(truth).log()
     }
 
     pub fn least_squares(&self, truth: &GradValVec) -> GradVal {

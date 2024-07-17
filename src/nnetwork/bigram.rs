@@ -61,7 +61,7 @@ impl Bigram {
         cycles: usize,
         learning_rate: f32,
         data_block_size: usize,
-        regularization: f32,
+        regularization: Option<f32>,
     ) {
         for n in 0..cycles {
             let training_data = self._data.get_training_block(data_block_size);
@@ -73,16 +73,23 @@ impl Bigram {
                 .sum::<GradVal>()
                 / (data_block_size as f32).into();
 
-            let n_param = GradVal::from(self._mlp.parameters().count() as f32);
-            // Mean of the sum of the squares of all parameters
-            let reg_loss = self
-                ._mlp
-                .parameters()
-                .map(|p| p.powf(2.))
-                .collect::<GradValVec>()
-                .sum()
-                * regularization.into()
-                / n_param;
+            let reg_loss = if regularization.is_some() {
+                let regularization = regularization.unwrap();
+                if regularization < 0. {
+                    panic!("Regularization coefficient must be positive.");
+                }
+                let n_param = GradVal::from(self._mlp.parameters().count() as f32);
+                // Mean of the sum of the squares of all parameters
+                self._mlp
+                    .parameters()
+                    .map(|p| p.powf(2.))
+                    .collect::<GradValVec>()
+                    .sum()
+                    * regularization.into()
+                    / n_param
+            } else {
+                0f32.into()
+            };
 
             let mut loss = fit_loss + reg_loss;
 
