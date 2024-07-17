@@ -3,7 +3,8 @@ use std::fmt::Display;
 use crate::nnetwork::{GradVal, GradValVec};
 
 use super::{
-    neural_traits::{Forward, Parameters},neurons::Neuron,
+    neural_traits::{Forward, Parameters},
+    neurons::Neuron,
 };
 
 pub struct LinearLayer {
@@ -106,14 +107,14 @@ impl Layer for ElementFunctionLayer {}
 
 pub struct VectorFunctionLayer {
     _func: &'static dyn Fn(&GradValVec) -> GradValVec,
-    _label: String
+    _label: String,
 }
 
 impl VectorFunctionLayer {
     pub fn new(f: &'static dyn Fn(&GradValVec) -> GradValVec, label: &str) -> VectorFunctionLayer {
-        VectorFunctionLayer{
+        VectorFunctionLayer {
             _func: f,
-            _label: label.into()
+            _label: label.into(),
         }
     }
 }
@@ -155,7 +156,7 @@ mod tests {
         let mut layer = LinearLayer::from_rand(2, 2, true);
         layer._neurons[0].set_weights(vec![GradVal::from(1.0), GradVal::from(2.0)]);
         layer._neurons[1].set_weights(vec![GradVal::from(4.0), GradVal::from(5.0)]);
-        layer._neurons[0].set_bias( Some(GradVal::from(3.0)));
+        layer._neurons[0].set_bias(Some(GradVal::from(3.0)));
         layer._neurons[1].set_bias(Some(GradVal::from(6.0)));
         let input = GradValVec::from(vec![GradVal::from(1.0), GradVal::from(2.0)]);
         let output = layer.forward(&input);

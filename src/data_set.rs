@@ -21,7 +21,7 @@ impl DataSet {
     }
 
     fn get_string_from_file(path: &str) -> String {
-        let data = fs::read_to_string(path);
+        let data = fs::read_to_string(path).and_then(|s| Ok(s.to_lowercase()));
         if data.is_err() {
             panic!(
                 "Received {:?}  while importing dataset from {}.",
@@ -45,7 +45,7 @@ impl DataSet {
     }
 
     pub fn get_training_block(&self, block_size: usize) -> &str {
-        if block_size >= self.training_len {
+        if block_size + 1 >= self.training_len {
             return self.get_training_data();
         }
         let end = rand::thread_rng().gen_range(block_size..=self.training_len);
@@ -77,7 +77,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn wrong_path() {
-        DataSet::new("no dataset here",0.9);
+        DataSet::new("no dataset here", 0.9);
     }
 
     #[test]
