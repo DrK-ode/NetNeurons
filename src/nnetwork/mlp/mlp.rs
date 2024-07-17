@@ -1,14 +1,8 @@
-use std::{fmt::Display, ops::Div};
+use std::fmt::Display;
 
 use crate::nnetwork::{GradVal, GradValVec};
 
 use super::{neural_layers::Layer, neural_traits::Forward, neural_traits::Parameters};
-
-#[derive(Clone, Copy)]
-pub enum LossType {
-    MaximumLikelihood,
-    LeastSquare,
-}
 
 pub struct MLP {
     _layers: Vec<Box<dyn Layer>>,
@@ -49,49 +43,11 @@ impl MLP {
         Self::check_layers(&self._layers);
     }
 
-    fn maximum_likelihood(probabilities: &GradValVec, truth: &GradValVec) -> GradVal {
-        -probabilities.dot(truth).log()
-    }
-
-    fn least_squares(output: &GradValVec, truth: &GradValVec) -> GradVal {
-        output
-            .iter()
-            .zip(truth.iter())
-            .map(|(v, t)| (v - t).powf(2.))
-            .sum::<GradVal>()
-            .div((truth.size() as f32).into())
-    }
-
-    pub fn loss(output: &GradValVec, truth: &GradValVec, formula: LossType) -> GradVal {
-        assert_eq!(
-            output.size(),
-            truth.size(),
-            "Cannot compare non-equal sized NnVec"
-        );
-        (match formula {
-            LossType::MaximumLikelihood => MLP::maximum_likelihood,
-            LossType::LeastSquare => MLP::least_squares,
-        })(output, truth)
-    }
-
-    pub fn decend_grad(
-        &mut self,
-        input_pairs: &Vec<(GradValVec, GradValVec)>,
-        learning_rate: f32,
-    ) -> GradVal {
-        let mut loss: GradVal = input_pairs
-            .iter()
-            .map(|(inp, truth)| {
-                let out = self.forward(&inp);
-                MLP::loss(&out, &truth, LossType::MaximumLikelihood)
-            })
-            .sum();
-
+    pub fn decend_grad(&mut self, loss: &mut GradVal, learning_rate: f32) {
         loss.backward();
         self.parameters().for_each(|p: &mut GradVal| {
             p.set_value(p.value() - learning_rate * p.grad().unwrap());
         });
-        loss
     }
 }
 

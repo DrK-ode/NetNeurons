@@ -1,9 +1,10 @@
 use std::str::FromStr;
 
 use super::{
-    char_set::CharSetError, mlp::VectorFunctionLayer, CharSet, ElementFunctionLayer, Forward, GradVal, GradValVec, LinearLayer, MLP
+    char_set::CharSetError, mlp::VectorFunctionLayer, CharSet, ElementFunctionLayer, Forward,
+    GradVal, GradValVec, LinearLayer, MLP,
 };
-use crate::data_set::DataSet;
+use crate::{data_set::DataSet, nnetwork::Parameters};
 
 pub struct Bigram {
     _data: DataSet,
@@ -17,11 +18,19 @@ impl Bigram {
         let n_chars = chars.size();
         let mut mlp = MLP::from_empty();
 
-        for _ in 0..number_of_layers {
+        for i in 1..=number_of_layers {
             mlp.add_layer(Box::new(LinearLayer::from_rand(n_chars, n_chars, true)));
-            //mlp.add_layer(Box::new(ElementFunctionLayer::new(&GradVal::sigmoid, "Sigmoid")));
+            if i != number_of_layers {
+                mlp.add_layer(Box::new(ElementFunctionLayer::new(
+                    &GradVal::sigmoid,
+                    "Sigmoid",
+                )));
+            }
         }
-        mlp.add_layer(Box::new(VectorFunctionLayer::new(&GradValVec::soft_max, "SoftMax")));
+        mlp.add_layer(Box::new(VectorFunctionLayer::new(
+            &GradValVec::soft_max,
+            "SoftMax",
+        )));
 
         Bigram {
             _data: data,
@@ -47,12 +56,37 @@ impl Bigram {
             .collect()
     }
 
-    pub fn learn(&mut self, cycles: usize, learning_rate: f32, data_block_size: usize) {
+    pub fn learn(
+        &mut self,
+        cycles: usize,
+        learning_rate: f32,
+        data_block_size: usize,
+        regularization: f32,
+    ) {
         for n in 0..cycles {
-            let loss = self._mlp.decend_grad(
-                &self.extract_correlations(self._data.get_training_block(data_block_size)),
-                learning_rate,
-            );
+            let training_data = self._data.get_training_block(data_block_size);
+            let input_pairs = self.extract_correlations(training_data);
+
+            let fit_loss: GradVal = input_pairs
+                .iter()
+                .map(|(inp, truth)| self._mlp.forward(&inp).maximum_likelihood(truth))
+                .sum::<GradVal>()
+                / (data_block_size as f32).into();
+
+            let n_param = GradVal::from(self._mlp.parameters().count() as f32);
+            // Mean of the sum of the squares of all parameters
+            let reg_loss = self
+                ._mlp
+                .parameters()
+                .map(|p| p.powf(2.))
+                .collect::<GradValVec>()
+                .sum()
+                * regularization.into()
+                / n_param;
+
+            let mut loss = fit_loss + reg_loss;
+
+            self._mlp.decend_grad(&mut loss, learning_rate);
             println!("Cycle {n} loss: {:e}", loss.value());
         }
     }

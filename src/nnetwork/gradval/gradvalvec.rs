@@ -36,7 +36,9 @@ impl From<Vec<GradVal>> for GradValVec {
 
 impl From<Vec<f32>> for GradValVec {
     fn from(values: Vec<f32>) -> Self {
-        GradValVec { _values: values.iter().map(|&v| GradVal::from(v)).collect() }
+        GradValVec {
+            _values: values.iter().map(|&v| GradVal::from(v)).collect(),
+        }
     }
 }
 
@@ -53,31 +55,61 @@ impl GradValVec {
         self._values.len()
     }
 
+    pub fn map<F>(&self, c: F) -> GradValVec
+    where
+        F: Fn(&GradVal) -> GradVal,
+    {
+        self._values.iter().map(c).collect()
+    }
+
     pub fn sum(&self) -> GradVal {
         GradVal::sum(&self._values)
     }
 
+    pub fn mean(&self) -> GradVal {
+        self.sum() / GradVal::from(self._values.len() as f32)
+    }
+
     pub fn dot(&self, other: &GradValVec) -> GradVal {
-        self._values.iter().zip(other._values.iter()).map(|(a,b)| a*b).sum()
+        self._values
+            .iter()
+            .zip(other._values.iter())
+            .map(|(a, b)| a * b)
+            .sum()
     }
 
     pub fn normalized(&self) -> GradValVec {
         let norm = self.sum();
-        self._values.iter().map(|v| v / &norm ).collect()
+        self._values.iter().map(|v| v / &norm).collect()
     }
 
     pub fn soft_max(&self) -> GradValVec {
-        self._values.iter().map(|v| v.exp() ).collect::<GradValVec>().normalized()
+        self._values
+            .iter()
+            .map(|v| v.exp())
+            .collect::<GradValVec>()
+            .normalized()
+    }
+
+    pub fn maximum_likelihood(&self, truth: &GradValVec) -> GradVal {
+        -self.dot(truth).log()
+    }
+
+    pub fn least_squares(&self, truth: &GradValVec) -> GradVal {
+        self.iter()
+            .zip(truth.iter())
+            .map(|(v, t)| (v - t).powf(2.))
+            .sum::<GradVal>()
     }
 
     pub fn collapsed(&self) -> Self {
         let mut vec = vec![GradVal::from(0.); self.len()];
         let mut rnd = rand::thread_rng().gen_range(0f32..1f32);
-        for (i,v) in self.normalized()._values.iter().enumerate() {
+        for (i, v) in self.normalized()._values.iter().enumerate() {
             rnd -= v.value();
             if rnd <= 0. {
                 vec[i] = GradVal::from(1.);
-                break; 
+                break;
             }
         }
         vec.into()
