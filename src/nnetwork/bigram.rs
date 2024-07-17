@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::Instant};
 
 use super::{
     char_set::CharSetError, mlp::VectorFunctionLayer, CharSet, ElementFunctionLayer, Forward,
@@ -63,6 +63,7 @@ impl Bigram {
         data_block_size: usize,
         regularization: Option<f32>,
     ) {
+        let timer = Instant::now();
         for n in 0..cycles {
             let training_data = self._data.get_training_block(data_block_size);
             let input_pairs = self.extract_correlations(training_data);
@@ -96,6 +97,7 @@ impl Bigram {
             self._mlp.decend_grad(&mut loss, learning_rate);
             println!("Cycle {n} loss: {:e}", loss.value());
         }
+        println!("Trained network with {} parameters for {cycles} cycles in {} ms.", self._mlp.parameters().count(), timer.elapsed().as_millis() );
     }
 
     pub fn predict(

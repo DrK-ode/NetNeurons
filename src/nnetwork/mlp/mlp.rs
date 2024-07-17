@@ -1,4 +1,4 @@
-use std::{fmt::Display, time::Instant};
+use std::fmt::Display;
 
 use crate::nnetwork::{GradVal, GradValVec};
 
@@ -44,9 +44,7 @@ impl MLP {
     }
 
     pub fn decend_grad(&mut self, loss: &mut GradVal, learning_rate: f32) {
-        let backward_timer = Instant::now();
         loss.backward();
-        println!("Backward propagation took {} ms.", backward_timer.elapsed().as_millis());
         self.parameters().for_each(|p: &mut GradVal| {
             p.set_value(p.value() - learning_rate * p.grad().unwrap());
         });
