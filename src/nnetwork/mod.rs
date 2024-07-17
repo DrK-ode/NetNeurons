@@ -6,4 +6,4 @@ mod mlp;
 pub use bigram::Bigram;
 pub use char_set::CharSet;
 pub use gradval::{GradVal,GradValVec};
-pub use mlp::{Neuron,LinearLayer,FunctionLayer,MLP,Forward,Parameters};
+pub use mlp::{Neuron,LinearLayer,ElementFunctionLayer,MLP,Forward,Parameters};

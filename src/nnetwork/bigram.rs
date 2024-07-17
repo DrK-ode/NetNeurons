@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use super::{
-    char_set::CharSetError, CharSet, Forward, FunctionLayer, GradVal, GradValVec, LinearLayer, MLP
+    char_set::CharSetError, mlp::VectorFunctionLayer, CharSet, ElementFunctionLayer, Forward, GradVal, GradValVec, LinearLayer, MLP
 };
 use crate::data_set::DataSet;
 
@@ -19,8 +19,9 @@ impl Bigram {
 
         for _ in 0..number_of_layers {
             mlp.add_layer(Box::new(LinearLayer::from_rand(n_chars, n_chars, true)));
-            mlp.add_layer(Box::new(FunctionLayer::new(&GradVal::sigmoid, "Sigmoid")));
+            //mlp.add_layer(Box::new(ElementFunctionLayer::new(&GradVal::sigmoid, "Sigmoid")));
         }
+        mlp.add_layer(Box::new(VectorFunctionLayer::new(&GradValVec::soft_max, "SoftMax")));
 
         Bigram {
             _data: data,
@@ -67,8 +68,7 @@ impl Bigram {
         }
         let mut last_char = self._charset.encode(s.chars().last().unwrap())?;
         for _ in 0..number_of_characters {
-            last_char = self._mlp.forward(&last_char);
-            last_char.collapse();
+            last_char = self._mlp.forward(&last_char).collapsed();
             s.push(self._charset.decode(&last_char)?);
         }
         Ok(s)

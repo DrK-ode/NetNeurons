@@ -2,7 +2,7 @@ use std::{fmt::Display, ops::Div};
 
 use crate::nnetwork::{GradVal, GradValVec};
 
-use super::{neural_layers::Layer, neural_traits::Parameters, neural_traits::Forward};
+use super::{neural_layers::Layer, neural_traits::Forward, neural_traits::Parameters};
 
 #[derive(Clone, Copy)]
 pub enum LossType {
@@ -49,16 +49,8 @@ impl MLP {
         Self::check_layers(&self._layers);
     }
 
-    fn maximum_likelihood(output: &GradValVec, truth: &GradValVec) -> GradVal {
-        let mut exped: GradValVec = output.iter().map(|v| v.exp()).collect();
-        exped.normalize();
-        exped
-            .iter()
-            .zip(truth.iter())
-            // This can't be right
-            .map(|(p, t)| (p * t).log())
-            .sum::<GradVal>()
-            .div((truth.size() as f32).into())
+    fn maximum_likelihood(probabilities: &GradValVec, truth: &GradValVec) -> GradVal {
+        -probabilities.dot(truth).log()
     }
 
     fn least_squares(output: &GradValVec, truth: &GradValVec) -> GradVal {
@@ -76,10 +68,10 @@ impl MLP {
             truth.size(),
             "Cannot compare non-equal sized NnVec"
         );
-        match formula {
-            LossType::MaximumLikelihood => MLP::maximum_likelihood(output, truth),
-            LossType::LeastSquare => MLP::least_squares(output, truth),
-        }
+        (match formula {
+            LossType::MaximumLikelihood => MLP::maximum_likelihood,
+            LossType::LeastSquare => MLP::least_squares,
+        })(output, truth)
     }
 
     pub fn decend_grad(
@@ -87,16 +79,14 @@ impl MLP {
         input_pairs: &Vec<(GradValVec, GradValVec)>,
         learning_rate: f32,
     ) -> GradVal {
-        let calc_loss = |mlp: &MLP, loss_type: LossType| -> GradVal {
-            input_pairs
-                .iter()
-                .map(|(inp, truth)| {
-                    let out = mlp.forward(&inp);
-                    MLP::loss(&out, &truth, loss_type)
-                })
-                .sum()
-        };
-        let mut loss = calc_loss(self, LossType::LeastSquare);
+        let mut loss: GradVal = input_pairs
+            .iter()
+            .map(|(inp, truth)| {
+                let out = self.forward(&inp);
+                MLP::loss(&out, &truth, LossType::MaximumLikelihood)
+            })
+            .sum();
+
         loss.backward();
         self.parameters().for_each(|p: &mut GradVal| {
             p.set_value(p.value() - learning_rate * p.grad().unwrap());

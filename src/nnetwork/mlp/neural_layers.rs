@@ -75,34 +75,63 @@ impl Layer for LinearLayer {
     }
 }
 
-pub struct FunctionLayer {
+pub struct ElementFunctionLayer {
     _func: &'static dyn Fn(&GradVal) -> GradVal,
     _label: String,
 }
 
-impl FunctionLayer {
-    pub fn new(f: &'static dyn Fn(&GradVal) -> GradVal, label: &str) -> FunctionLayer {
-        FunctionLayer {
+impl ElementFunctionLayer {
+    pub fn new(f: &'static dyn Fn(&GradVal) -> GradVal, label: &str) -> ElementFunctionLayer {
+        ElementFunctionLayer {
             _func: f,
             _label: label.into(),
         }
     }
 }
 
-impl Display for FunctionLayer {
+impl Display for ElementFunctionLayer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "FunctionLayer: [{:?}]", self._label)
+        writeln!(f, "ElementFunctionLayer: [{:?}]", self._label)
     }
 }
 
-impl Forward for FunctionLayer {
+impl Forward for ElementFunctionLayer {
     type Output = GradValVec;
     fn forward(&self, x: &GradValVec) -> Self::Output {
         GradValVec::from(x.iter().map(|n| (self._func)(n)).collect::<Vec<_>>())
     }
 }
-impl Parameters for FunctionLayer {}
-impl Layer for FunctionLayer {}
+impl Parameters for ElementFunctionLayer {}
+impl Layer for ElementFunctionLayer {}
+
+pub struct VectorFunctionLayer {
+    _func: &'static dyn Fn(&GradValVec) -> GradValVec,
+    _label: String
+}
+
+impl VectorFunctionLayer {
+    pub fn new(f: &'static dyn Fn(&GradValVec) -> GradValVec, label: &str) -> VectorFunctionLayer {
+        VectorFunctionLayer{
+            _func: f,
+            _label: label.into()
+        }
+    }
+}
+
+impl Display for VectorFunctionLayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "VectorFunctionLayer: [{:?}]", self._label)
+    }
+}
+
+impl Forward for VectorFunctionLayer {
+    type Output = GradValVec;
+    fn forward(&self, x: &GradValVec) -> Self::Output {
+        (self._func)(x)
+    }
+}
+impl Parameters for VectorFunctionLayer {}
+impl Layer for VectorFunctionLayer {}
 
 #[cfg(test)]
 mod tests {

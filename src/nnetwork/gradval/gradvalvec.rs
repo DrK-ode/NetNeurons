@@ -57,23 +57,29 @@ impl GradValVec {
         GradVal::sum(&self._values)
     }
 
-    pub fn normalize(&mut self){
-        let norm = self.sum();
-        self._values = self._values.iter().map(|v| v / &norm ).collect();
+    pub fn dot(&self, other: &GradValVec) -> GradVal {
+        self._values.iter().zip(other._values.iter()).map(|(a,b)| a*b).sum()
     }
 
-    pub fn collapse(&mut self) -> &Self {
-        self.normalize();
+    pub fn normalized(&self) -> GradValVec {
+        let norm = self.sum();
+        self._values.iter().map(|v| v / &norm ).collect()
+    }
+
+    pub fn soft_max(&self) -> GradValVec {
+        self._values.iter().map(|v| v.exp() ).collect::<GradValVec>().normalized()
+    }
+
+    pub fn collapsed(&self) -> Self {
         let mut vec = vec![GradVal::from(0.); self.len()];
         let mut rnd = rand::thread_rng().gen_range(0f32..1f32);
-        for (i,v) in self._values.iter().enumerate() {
+        for (i,v) in self.normalized()._values.iter().enumerate() {
             rnd -= v.value();
             if rnd <= 0. {
                 vec[i] = GradVal::from(1.);
                 break; 
             }
         }
-        self._values = vec;
-        self
+        vec.into()
     }
 }
