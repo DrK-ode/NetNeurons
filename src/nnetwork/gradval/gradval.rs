@@ -1,6 +1,8 @@
 use std::{
     cell::RefCell,
+    collections::HashSet,
     fmt::Display,
+    hash::Hash,
     iter::Sum,
     ops::{Add, Div, Mul, Neg, Sub},
     rc::Rc,
@@ -95,7 +97,7 @@ impl From<f32> for Gv {
     }
 }
 
-// Back propagation
+// Partial derivative calculation
 impl Gv {
     fn calc_grad(&self) {
         fn add_grad(gv: &Rc<RefCell<Gv>>, new_grad: f32) {
@@ -338,18 +340,42 @@ impl GradVal {
     }
 }
 
+// Helper struct to be able to use HashSet
+struct HashableGv {
+    _gv: Rc<RefCell<Gv>>,
+}
+impl HashableGv {
+    pub fn new(gv: &Rc<RefCell<Gv>>) -> Self {
+        HashableGv { _gv: gv.clone() }
+    }
+}
+impl PartialEq for HashableGv {
+    fn eq(&self, other: &Self) -> bool {
+        self._gv.as_ref().as_ptr() == other._gv.as_ref().as_ptr()
+    }
+}
+impl Eq for HashableGv {}
+impl Hash for HashableGv {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let h = self._gv.as_ref().as_ptr() as i64;
+        state.write_i64(h);
+        state.finish();
+    }
+}
+
 // Backward propagation
 impl GradVal {
     pub fn backward(&mut self) {
+
         fn collect_and_clear(
             gv: &Rc<RefCell<Gv>>,
-            visited: &mut Vec<Rc<RefCell<Gv>>>,
+            visited: &mut HashSet<HashableGv>,
             gvs: &mut Vec<Rc<RefCell<Gv>>>,
         ) {
-            if !visited.contains(&gv) {
+            if !visited.contains(&HashableGv::new(gv)) {
                 // Clear grad before new calc
                 gv.borrow_mut()._grad = None;
-                visited.push(gv.clone());
+                visited.insert(HashableGv::new(gv));
                 match &gv.borrow()._op {
                     GradValOp::Noop => {
                         return ();
@@ -367,7 +393,8 @@ impl GradVal {
                 gvs.push(gv.clone());
             }
         }
-        let mut visited: Vec<Rc<RefCell<Gv>>> = Vec::new();
+        
+        let mut visited: HashSet<HashableGv> = HashSet::new();
         let mut gvs: Vec<Rc<RefCell<Gv>>> = Vec::new();
         collect_and_clear(&self._gv, &mut visited, &mut gvs);
 
