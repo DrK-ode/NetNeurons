@@ -48,7 +48,7 @@ impl DataSet {
         if block_size >= self.training_len {
             return self.get_training_data();
         }
-        let end = rand::thread_rng().gen_range(block_size..self.training_len);
+        let end = rand::thread_rng().gen_range(block_size..=self.training_len);
         &self.the_data[end - block_size..end]
     }
 
