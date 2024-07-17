@@ -2,10 +2,9 @@ use std::{
     cell::RefCell,
     collections::HashSet,
     fmt::Display,
-    hash::Hash,
     iter::Sum,
     ops::{Add, Div, Mul, Neg, Sub},
-    rc::Rc,
+    rc::Rc, time::Instant,
 };
 
 type Ancestor = Rc<RefCell<Gv>>;
@@ -340,42 +339,18 @@ impl GradVal {
     }
 }
 
-// Helper struct to be able to use HashSet
-struct HashableGv {
-    _gv: Rc<RefCell<Gv>>,
-}
-impl HashableGv {
-    pub fn new(gv: &Rc<RefCell<Gv>>) -> Self {
-        HashableGv { _gv: gv.clone() }
-    }
-}
-impl PartialEq for HashableGv {
-    fn eq(&self, other: &Self) -> bool {
-        self._gv.as_ref().as_ptr() == other._gv.as_ref().as_ptr()
-    }
-}
-impl Eq for HashableGv {}
-impl Hash for HashableGv {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let h = self._gv.as_ref().as_ptr() as i64;
-        state.write_i64(h);
-        state.finish();
-    }
-}
-
 // Backward propagation
 impl GradVal {
     pub fn backward(&mut self) {
-
         fn collect_and_clear(
             gv: &Rc<RefCell<Gv>>,
-            visited: &mut HashSet<HashableGv>,
+            visited: &mut HashSet<usize>,
             gvs: &mut Vec<Rc<RefCell<Gv>>>,
         ) {
-            if !visited.contains(&HashableGv::new(gv)) {
+            if !visited.contains(&(gv.as_ref().as_ptr() as usize)) {
                 // Clear grad before new calc
                 gv.borrow_mut()._grad = None;
-                visited.insert(HashableGv::new(gv));
+                visited.insert(gv.as_ref().as_ptr() as usize);
                 match &gv.borrow()._op {
                     GradValOp::Noop => {
                         return ();
@@ -393,16 +368,18 @@ impl GradVal {
                 gvs.push(gv.clone());
             }
         }
-        
-        let mut visited: HashSet<HashableGv> = HashSet::new();
+        let mut visited: HashSet<usize> = HashSet::new();
         let mut gvs: Vec<Rc<RefCell<Gv>>> = Vec::new();
-        collect_and_clear(&self._gv, &mut visited, &mut gvs);
 
+        let timer = Instant::now();
+        collect_and_clear(&self._gv, &mut visited, &mut gvs);
+        println!("Collection of {} nodes took {} ms", visited.len(), timer.elapsed().as_millis());
+
+        let timer = Instant::now();
         // Set gradient for root value to 1
         gvs.last().unwrap().borrow_mut()._grad = Some(1.);
-        for gv in gvs.iter().rev() {
-            gv.borrow().calc_grad();
-        }
+        gvs.iter().rev().for_each(|gv| gv.borrow().calc_grad());
+        println!("Gradient calculation took {} ms.", timer.elapsed().as_millis());
     }
 }
 
