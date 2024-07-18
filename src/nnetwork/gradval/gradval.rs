@@ -345,7 +345,7 @@ impl GradVal {
         fn collect_and_clear(
             gv: &Rc<RefCell<Gv>>,
             visited: &mut HashSet<usize>,
-            gvs: &mut Vec<Rc<RefCell<Gv>>>,
+            out: &mut Vec<Rc<RefCell<Gv>>>,
         ) {
             if !visited.contains(&(gv.as_ref().as_ptr() as usize)) {
                 // Clear grad before new calc
@@ -355,30 +355,30 @@ impl GradVal {
                     GradValOp::Noop => {
                         return ();
                     }
-                    GradValOp::Exp(a) | GradValOp::Log(a) => collect_and_clear(a, visited, gvs),
+                    GradValOp::Exp(a) | GradValOp::Log(a) => collect_and_clear(a, visited, out),
                     GradValOp::Pow(a, b) | GradValOp::Add(a, b) | GradValOp::Mul(a, b) => {
-                        collect_and_clear(&a, visited, gvs);
-                        collect_and_clear(&b, visited, gvs);
+                        collect_and_clear(&a, visited, out);
+                        collect_and_clear(&b, visited, out);
                     }
                     GradValOp::Sum(vec) => {
                         vec.iter()
-                            .for_each(|gv| collect_and_clear(gv, visited, gvs));
+                            .for_each(|gv| collect_and_clear(gv, visited, out));
                     }
                 }
-                gvs.push(gv.clone());
+                out.push(gv.clone());
             }
         }
         let mut visited: HashSet<usize> = HashSet::new();
-        let mut gvs: Vec<Rc<RefCell<Gv>>> = Vec::new();
+        let mut out: Vec<Rc<RefCell<Gv>>> = Vec::new();
 
         let timer = Instant::now();
-        collect_and_clear(&self._gv, &mut visited, &mut gvs);
+        collect_and_clear(&self._gv, &mut visited, &mut out);
         println!("Collection of {} nodes took {} ms", visited.len(), timer.elapsed().as_millis());
 
         let timer = Instant::now();
         // Set gradient for root value to 1
-        gvs.last().unwrap().borrow_mut()._grad = Some(1.);
-        gvs.iter().rev().for_each(|gv| gv.borrow().calc_grad());
+        out.last().unwrap().borrow_mut()._grad = Some(1.);
+        out.iter().rev().for_each(|gv| gv.borrow().calc_grad());
         println!("Gradient calculation took {} ms.", timer.elapsed().as_millis());
     }
 }
