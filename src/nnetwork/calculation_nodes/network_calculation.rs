@@ -7,19 +7,19 @@ struct NetworkCalculation {
 }
 
 impl NetworkCalculation {
-    fn new(root: &ValNodeShared) -> Self {
+    fn new(root: &TensorShared) -> Self {
         NetworkCalculation {
             _op_order: Self::topo_sort(root),
         }
     }
 
-    fn forward(&self) -> ValNodeShared {
+    fn forward(&self) -> TensorShared {
         todo!()
     }
 }
 
 impl NetworkCalculation {
-    pub fn topo_sort(root: &ValNodeShared) -> Vec<OpNodeShared> {
+    pub fn topo_sort(root: &TensorShared) -> Vec<OpNodeShared> {
         fn topo_sort_recursive(
             op: &OpNodeShared,
             visited: &mut HashSet<usize>,
@@ -30,18 +30,11 @@ impl NetworkCalculation {
             }
             if !visited.contains(&ptr_as_usize(&op)) {
                 visited.insert(ptr_as_usize(&op));
-                match &op._inp {
-                    NodeData::Single(prev_value) => {
+                op._inp.iter().for_each(|prev_value| {
                         if let Some(from_op) = &prev_value.borrow()._parent_op {
                             topo_sort_recursive(from_op, visited, out);
                         };
-                    }
-                    NodeData::Many(prev_values) => prev_values.iter().for_each(|prev_value| {
-                        if let Some(from_op) = &prev_value.borrow()._parent_op {
-                            topo_sort_recursive(from_op, visited, out);
-                        };
-                    }),
-                }
+                    });
                 out.push(op.clone());
             }
         }
