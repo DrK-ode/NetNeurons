@@ -2,6 +2,32 @@ use std::{f64::NAN, fmt::Display};
 
 use super::*;
 
+impl Debug for Tensor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tensor")
+            .field(
+                "_parent_op",
+                &(match self._parent_op.as_ref() {
+                    Some(op) => format!("Some({})", op._op.symbol()),
+                    None => "None".to_string(),
+                })
+                .to_string(),
+            )
+            .field(
+                "_child_op",
+                &(match self._child_op.as_ref() {
+                    Some(op) => format!("Some({})", op._op.symbol()),
+                    None => "None".to_string(),
+                })
+                .to_string(),
+            )
+            .field("_shape", &self._shape)
+            .field("_values", &self._value)
+            .field("_derivative", &self._derivative)
+            .finish()
+    }
+}
+
 // Access methods
 impl Tensor {
     pub fn parent_op(&self) -> Option<OpNodeShared> {
@@ -12,12 +38,20 @@ impl Tensor {
         self._child_op.clone()
     }
 
-    pub fn value(&self, x: usize, y: usize, z: usize) -> Option<FloatType> {
-        let index = z * self._shape.0 * self._shape.1 + y * self._shape.0 + x;
-        self._values.get(index).copied()
+    pub fn data(&self) -> &[FloatType] {
+        &self._value
     }
 
-    pub fn derivative(&self, x: usize, y: usize, z: usize) -> Option<FloatType> {
+    pub fn derivative(&self) -> &[FloatType] {
+        &self._derivative
+    }
+
+    pub fn value(&self, row: usize, col: usize, depth: usize) -> Option<FloatType> {
+        let index = depth * self._shape.0 * self._shape.1 + col * self._shape.0 + row;
+        self._value.get(index).copied()
+    }
+
+    pub fn derivative_value(&self, x: usize, y: usize, z: usize) -> Option<FloatType> {
         let index = z * self._shape.0 * self._shape.1 + y * self._shape.0 + x;
         self._derivative.get(index).copied()
     }
@@ -29,31 +63,31 @@ impl Tensor {
                 into_type: TensorType::Scalar,
             })
         } else {
-            Ok(self._values[0])
+            Ok(self._value[0])
         }
     }
 
-    pub fn as_col_vector(&self) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
-        if self.tensor_type() != TensorType::Vector(VecOrientation::Column) {
-            Err(TensorConversionError {
-                was_type: self.tensor_type(),
-                into_type: TensorType::Vector(VecOrientation::Column),
-            })
-        } else {
-            let mut out = Vec::new();
-            self._values.iter().for_each(|&f| out.push(vec![f]));
-            Ok(out)
-        }
-    }
-
-    pub fn as_row_vector(&self) -> Result<Vec<FloatType>, TensorConversionError> {
+    pub fn as_row_vector(&self) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
         if self.tensor_type() != TensorType::Vector(VecOrientation::Row) {
             Err(TensorConversionError {
                 was_type: self.tensor_type(),
                 into_type: TensorType::Vector(VecOrientation::Row),
             })
         } else {
-            Ok(self._values.clone())
+            let mut out = Vec::new();
+            self._value.iter().for_each(|&f| out.push(vec![f]));
+            Ok(out)
+        }
+    }
+
+    pub fn as_col_vector(&self) -> Result<Vec<FloatType>, TensorConversionError> {
+        if self.tensor_type() != TensorType::Vector(VecOrientation::Column) {
+            Err(TensorConversionError {
+                was_type: self.tensor_type(),
+                into_type: TensorType::Vector(VecOrientation::Column),
+            })
+        } else {
+            Ok(self._value.clone())
         }
     }
 
@@ -66,9 +100,9 @@ impl Tensor {
         } else {
             let mut out = Vec::new();
             for i in 0..self._shape.0 {
-                let begin = i*self._shape.1;
-                let end = (i+1)*self._shape.1;
-                out.push( self._values[begin..end].to_owned() );
+                let begin = i * self._shape.1;
+                let end = (i + 1) * self._shape.1;
+                out.push(self._value[begin..end].to_owned());
             }
             Ok(out)
         }
@@ -90,15 +124,19 @@ pub enum TensorType {
     Tensor,
 }
 
-impl Display for TensorType{
+impl Display for TensorType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self{
-            TensorType::None =>write!(f,  "None"),
-                TensorType::Scalar => write!(f, "Scalar"),
-            TensorType::Vector(orient) => write!(f, "{} vector", match orient {
-                VecOrientation::Row => "Row",
-                VecOrientation::Column => "Column",
-            }),
+        match &self {
+            TensorType::None => write!(f, "None"),
+            TensorType::Scalar => write!(f, "Scalar"),
+            TensorType::Vector(orient) => write!(
+                f,
+                "{} vector",
+                match orient {
+                    VecOrientation::Row => "Row",
+                    VecOrientation::Column => "Column",
+                }
+            ),
             TensorType::Matrix => write!(f, "Matrix"),
             TensorType::Tensor => write!(f, "Tensor"),
         }
@@ -111,9 +149,13 @@ pub struct TensorConversionError {
     into_type: TensorType,
 }
 
-impl Display for TensorConversionError{
+impl Display for TensorConversionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"Tried to interpret Tensor as {} but failed because it was {}", self.into_type, self.was_type)
+        write!(
+            f,
+            "Tried to interpret Tensor as {} but failed because it was {}",
+            self.into_type, self.was_type
+        )
     }
 }
 
@@ -158,37 +200,43 @@ impl Tensor {
     pub fn from_scalar(value: FloatType) -> TensorShared {
         Rc::new(RefCell::new(Tensor {
             _shape: (1, 1, 1),
-            _values: vec![value],
+            _value: vec![value],
+            _derivative: vec![NAN],
             ..Default::default()
         }))
     }
 
-    pub fn from_vector(value: Vec<FloatType>, shape: (usize, usize, usize)) -> TensorShared {
-        if value.len() != shape.0 * shape.1 * shape.2 {
+    pub fn from_vector(value: Vec<FloatType>, shape: TensorShape) -> TensorShared {
+        let size = value.len();
+        if size != shape.0 * shape.1 * shape.2 {
             panic!("Value vector does not match the supplied shape.");
         }
         Rc::new(RefCell::new(Tensor {
             _shape: shape,
-            _values: value,
-            ..Default::default()
-        }))
-    }
-    
-    pub fn from_shape(shape: (usize, usize, usize)) -> TensorShared {
-        let size =  shape.0 * shape.1 * shape.2;
-        Rc::new(RefCell::new(Tensor {
-            _shape: shape,
-            _values: vec![NAN;size],
+            _value: value,
+            _derivative: vec![NAN; size],
             ..Default::default()
         }))
     }
 
-    pub fn reshape(tensor: Tensor, shape: (usize, usize, usize)) -> TensorShared {
-        let mut new_value = tensor._values;
-        new_value.resize(shape.0 * shape.1 * shape.2, 0.);
+    pub fn from_shape(shape: TensorShape) -> TensorShared {
+        let size = shape.0 * shape.1 * shape.2;
         Rc::new(RefCell::new(Tensor {
             _shape: shape,
-            _values: new_value,
+            _value: vec![NAN; size],
+            _derivative: vec![NAN; size],
+            ..Default::default()
+        }))
+    }
+
+    pub fn reshape(&self, shape: TensorShape) -> TensorShared {
+        assert_eq!(
+            self._value.len(),
+            shape.0 * shape.1 * shape.2,
+            "Size must not change when reshaping Tensor"
+        );
+        Rc::new(RefCell::new(Tensor {
+            _shape: shape,
             ..Default::default()
         }))
     }
@@ -203,28 +251,28 @@ impl Display for Tensor {
             }
             TensorType::Scalar => {
                 // Scalar
-                write!(f, "Scalar: {}", self._values[0])?
+                write!(f, "Scalar: [value: {}, ∇: {}]", self._value[0], self._derivative[0])?
             }
             TensorType::Vector(orient) => {
                 // Column Vector
                 write!(
                     f,
-                    "Vector ({}): {:?}",
+                    "Vector ({}): [value: {:?} ∇: {:?}]",
                     match orient {
                         VecOrientation::Column => "col",
                         VecOrientation::Row => "row",
                     },
-                    self._values
+                    self._value, self._derivative
                 )?
             }
             TensorType::Matrix => {
                 // Matrix
                 let (x, y, _) = self._shape;
-                write!(f, "Matrix ({}x{}): {:?}", x, y, self._values)?
+                write!(f, "Matrix ({}x{}): [value: {:?}, ∇: {:?}]", x, y, self._value, self._derivative)?
             }
             TensorType::Tensor => {
                 // Some general tensor
-                write!(f, "Tensor {:?}: {:?}", self._shape, self._values)?
+                write!(f, "Tensor {:?}: [value: {:?}, ∇: {:?}]", self._shape, self._value, self._derivative)?
             }
         }
         Ok(())
