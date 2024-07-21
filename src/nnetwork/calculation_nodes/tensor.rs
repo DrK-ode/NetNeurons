@@ -1,6 +1,6 @@
-use std::{f64::NAN, fmt::Display};
+use std::{f64::NAN, fmt::Display, ops::{Add, Div, Mul, Neg, Sub}};
 
-use op_node::{ProdOp, SumOp};
+use op_node::{AddOp, ExpOp, LogOp, MulOp, NegOp, PowOp, ProdOp, SumOp};
 
 use super::*;
 
@@ -226,7 +226,15 @@ impl TensorShared {
 }
 
 // Tensor properties
+impl Tensor{
+    pub fn len(&self)->usize{
+       self._value.len() 
+    }
+}
 impl TensorShared {
+    pub fn len(&self) -> usize {
+        self.borrow().len()
+    }
     pub fn tensor_type(&self) -> TensorType {
         match self.borrow()._shape {
             (0, 0, 0) => {
@@ -259,6 +267,22 @@ impl TensorShared {
 
 // Operations
 impl TensorShared {
+    pub fn exp(&self) -> TensorShared {
+        OpNode::new_op(Box::new(ExpOp {}), vec![self.clone()])
+    }
+    
+    pub fn log(&self) -> TensorShared {
+        OpNode::new_op(Box::new(LogOp {}), vec![self.clone()])
+    }
+    
+    pub fn inv(&self) -> TensorShared {
+        OpNode::new_op(Box::new(PowOp {}), vec![self.clone(), TensorShared::from_vector(vec![-1.;self.len()], self.borrow()._shape)])
+    }
+    
+    pub fn pow(&self, rhs: &TensorShared) -> TensorShared {
+        OpNode::new_op(Box::new(PowOp {}), vec![self.clone(), rhs.clone()])
+    }
+    
     pub fn sum(&self) -> TensorShared {
         // Sum adds all elements in a tensor together. Implemented as a variant of Add.
         OpNode::new_op(Box::new(SumOp {}), vec![self.clone()])
@@ -267,6 +291,85 @@ impl TensorShared {
     pub fn product(&self) -> TensorShared {
         // Prod multiplies all elements in a tensor together. Implemented as a unary variant of Mul.
         OpNode::new_op(Box::new(ProdOp {}), vec![self.clone()])
+    }
+    
+    pub fn add_many(inp: &[TensorShared]) -> TensorShared {
+        OpNode::new_op(Box::new(AddOp {}), inp.to_owned())
+    }
+    
+    pub fn mul_many(inp: &[TensorShared]) -> TensorShared {
+        OpNode::new_op(Box::new(MulOp {}), inp.to_owned())
+    }
+}
+
+impl Neg for TensorShared{
+    type Output = TensorShared;
+
+    fn neg(self) -> Self::Output {
+        -(&self)
+    }
+}
+impl Neg for &TensorShared{
+    type Output = TensorShared;
+
+    fn neg(self) -> Self::Output {
+        OpNode::new_op(Box::new(NegOp {}), vec![self.clone()])
+    }
+}
+impl Add for TensorShared{
+    type Output = TensorShared;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        &self + &rhs
+    }
+}
+impl Add for &TensorShared{
+    type Output = TensorShared;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        OpNode::new_op(Box::new(AddOp {}), vec![self.clone(),rhs.clone()])
+    }
+}
+impl Sub for TensorShared{
+    type Output = TensorShared;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        &self - &rhs
+    }
+}
+impl Sub for &TensorShared{
+    type Output = TensorShared;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        OpNode::new_op(Box::new(AddOp {}), vec![self.clone(),-rhs])
+    }
+}
+impl Mul for TensorShared{
+    type Output = TensorShared;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        &self * &rhs
+    }
+}
+impl Mul for &TensorShared{
+    type Output = TensorShared;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        OpNode::new_op(Box::new(MulOp {}), vec![self.clone(),rhs.clone()])
+    }
+}
+impl Div for TensorShared{
+    type Output = TensorShared;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        &self / &rhs
+    }
+}
+impl Div for &TensorShared{
+    type Output = TensorShared;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        OpNode::new_op(Box::new(MulOp {}), vec![self.clone(),rhs.inv()])
     }
 }
 

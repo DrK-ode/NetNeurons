@@ -35,34 +35,6 @@ impl OpNode {
         out
     }
 
-    pub fn exp(inp: &TensorShared) -> TensorShared {
-        // Exp is a unary operator so it will always be performed element-wise
-        Self::new_op(Box::new(ExpOp {}), vec![inp.clone()])
-    }
-    pub fn log(inp: &TensorShared) -> TensorShared {
-        // Log is a unary operator so it will always be performed element-wise
-        Self::new_op(Box::new(LogOp {}), vec![inp.clone()])
-    }
-    pub fn neg(inp: &TensorShared) -> TensorShared {
-        // Neg is a unary operator so it will always be performed element-wise
-        Self::new_op(Box::new(NegOp {}), vec![inp.clone()])
-    }
-
-    pub fn add(inp: &[TensorShared]) -> TensorShared {
-        // Add is a multi input operator. Operands must be of the same shape.
-        Self::new_op(Box::new(AddOp {}), inp.to_owned())
-    }
-
-    pub fn mul(inp: &[TensorShared]) -> TensorShared {
-        // Mul is an element-wise multi input operator. Operands must be of the same shape.
-        Self::new_op(Box::new(MulOp {}), inp.to_owned())
-    }
-
-    pub fn pow(inp1: &TensorShared, inp2: &TensorShared) -> TensorShared {
-        // Pow is an element-wise two-input operator. Operands must be of the same shape.
-        Self::new_op(Box::new(PowOp {}), vec![inp1.clone(), inp2.clone()])
-    }
-
     pub fn perform_operation(&self) {
         self._op.operate(&self._inp, &self._out)
     }
@@ -364,7 +336,7 @@ mod tests {
     fn addition_of_two_scalars() {
         let inp1 = TensorShared::from_scalar(1.);
         let inp2 = TensorShared::from_scalar(2.);
-        let out = OpNode::add(&[inp1.clone(), inp2.clone()]);
+        let out = &inp1 + &inp2;
         let calc = NetworkCalculation::new(&out);
         calc.forward();
         assert_eq!(out.value_as_scalar().unwrap(), 3.);
@@ -377,7 +349,7 @@ mod tests {
     #[test]
     fn addition_of_scalar_to_itself() {
         let inp = TensorShared::from_scalar(1.);
-        let out = OpNode::add(&[inp.clone(), inp.clone()]);
+        let out = &inp + &inp;
         let calc = NetworkCalculation::new(&out);
         calc.forward();
         assert_eq!(out.value_as_scalar().unwrap(), 2.);
@@ -393,7 +365,7 @@ mod tests {
         let expected_value = vec![4., 6.];
         let expected_derivative1 = vec![1., 1.];
         let expected_derivative2 = vec![1., 1.];
-        let out = OpNode::add(&[inp1.clone(), inp2.clone()]);
+        let out = &inp1 + &inp2;
         let calc = NetworkCalculation::new(&out);
         calc.forward();
         assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
@@ -424,7 +396,7 @@ mod tests {
         let expected_value = vec![3., 8.];
         let expected_derivative1 = vec![3., 4.];
         let expected_derivative2 = vec![1., 2.];
-        let out = OpNode::mul(&[inp1.clone(), inp2.clone()]);
+        let out = &inp1 * &inp2;
         let calc = NetworkCalculation::new(&out);
         calc.forward();
         assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
@@ -455,7 +427,7 @@ mod tests {
         let expected_value = vec![1., 16.];
         let expected_derivative1 = vec![3., 32.];
         let expected_derivative2 = vec![0., (2 as FloatType).ln() * 16.];
-        let out = OpNode::pow(&inp1, &inp2);
+        let out = inp1.pow(&inp2);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
         assert_eq!(out.value(), expected_value);
@@ -471,7 +443,7 @@ mod tests {
         let expected_value = inp.iter().map(|val| -val).collect::<Vec<_>>();
         let expected_derivative = inp.iter().map(|_| -1.).collect::<Vec<_>>();
         let inp = TensorShared::from_vector(inp, (1, 2, 2));
-        let out = OpNode::neg(&inp);
+        let out = -(&inp);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
         assert_eq!(out.value(), expected_value);
@@ -486,7 +458,7 @@ mod tests {
         let expected_value = inp.iter().map(|val| val.ln()).collect::<Vec<_>>();
         let expected_derivative = inp.iter().map(|val| 1. / val).collect::<Vec<_>>();
         let inp = TensorShared::from_vector(inp, (1, 2, 2));
-        let out = OpNode::log(&inp);
+        let out = inp.log();
         let calc = NetworkCalculation::new(&out);
         calc.forward();
         assert_eq!(out.value(), expected_value);
@@ -501,7 +473,7 @@ mod tests {
         let expected_value = inp.iter().map(|val| val.exp()).collect::<Vec<_>>();
         let expected_derivative = inp.iter().map(|val| val.exp()).collect::<Vec<_>>();
         let inp = TensorShared::from_vector(inp, (1, 2, 2));
-        let out = OpNode::exp(&inp);
+        let out = inp.exp();
         let calc = NetworkCalculation::new(&out);
         calc.forward();
         assert_eq!(out.value(), expected_value);
@@ -517,13 +489,10 @@ mod tests {
         let c = TensorShared::from_scalar(1.0);
         let c2 = TensorShared::from_scalar(2.0);
         let c3 = TensorShared::from_scalar(3.0);
-        let d = OpNode::add(&[
-            OpNode::add(&[a.clone(), b.clone()]),
-            OpNode::neg(&OpNode::mul(&[c.clone(), c2.clone()])),
-        ]);
-        let e = OpNode::pow(&OpNode::neg(&d), &c3);
-        let f = OpNode::log(&e);
-        let g = OpNode::exp(&f);
+        let d = &a+ &b -(&c * &c2);
+        let e = (-&d).pow(&c3);
+        let f = e.log();
+        let g = f.exp();
 
         let calc = NetworkCalculation::new(&g);
         calc.forward();
