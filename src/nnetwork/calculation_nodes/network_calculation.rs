@@ -63,7 +63,7 @@ impl NetworkCalculation {
         let mut sorted: Vec<OpNodeShared> = Vec::new();
 
         let timer = Instant::now();
-        if let Some(from_op) = &root.borrow().parent_op() {
+        if let Some(from_op) = &root.parent_op() {
             topo_sort_recursive(from_op, &mut visited, &mut sorted);
         }
         println!(

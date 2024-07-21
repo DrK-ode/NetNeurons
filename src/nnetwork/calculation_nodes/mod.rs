@@ -1,9 +1,14 @@
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
 type FloatType = f64;
 type TensorShape = (usize,usize,usize);
-pub type TensorShared = Rc<RefCell<Tensor>>;
+//pub type TensorShared = Rc<RefCell<Tensor>>;
 pub type OpNodeShared = Rc<OpNode>;
+
+#[derive(Debug,Default,Clone)]
+pub struct TensorShared{
+    _tensor: Rc<RefCell<Tensor>>
+}
 
 #[derive(Default)]
 pub struct Tensor {
@@ -18,6 +23,7 @@ pub trait Operator {
     fn operate(&self, inp: &[TensorShared], out: &TensorShared);
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared);
     fn symbol(&self) -> &str;
+    fn output_shape(&self, input: &[TensorShared]) -> Option<TensorShape>;
 }
 
 pub struct OpNode {
