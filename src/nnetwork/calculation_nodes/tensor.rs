@@ -38,7 +38,7 @@ impl Tensor {
         self._child_op.clone()
     }
 
-    pub fn data(&self) -> &[FloatType] {
+    pub fn value(&self) -> &[FloatType] {
         &self._value
     }
 
@@ -46,28 +46,44 @@ impl Tensor {
         &self._derivative
     }
 
-    pub fn value(&self, row: usize, col: usize, depth: usize) -> Option<FloatType> {
+    pub fn value_indexed(&self, row: usize, col: usize, depth: usize) -> Option<FloatType> {
         let index = depth * self._shape.0 * self._shape.1 + col * self._shape.0 + row;
         self._value.get(index).copied()
     }
 
-    pub fn derivative_value(&self, x: usize, y: usize, z: usize) -> Option<FloatType> {
+    pub fn derivative_indexed(&self, x: usize, y: usize, z: usize) -> Option<FloatType> {
         let index = z * self._shape.0 * self._shape.1 + y * self._shape.0 + x;
         self._derivative.get(index).copied()
     }
 
-    pub fn as_scalar(&self) -> Result<FloatType, TensorConversionError> {
+    pub fn value_as_scalar(&self) -> Result<FloatType, TensorConversionError>{
+        self.data_as_scalar(&self._value)
+    }
+    
+    pub fn derivative_as_scalar(&self) -> Result<FloatType, TensorConversionError>{
+        self.data_as_scalar(&self._derivative)
+    }
+    
+    fn data_as_scalar(&self, data: &[FloatType] ) -> Result<FloatType, TensorConversionError> {
         if self.tensor_type() != TensorType::Scalar {
             Err(TensorConversionError {
                 was_type: self.tensor_type(),
                 into_type: TensorType::Scalar,
             })
         } else {
-            Ok(self._value[0])
+            Ok(data[0])
         }
     }
 
-    pub fn as_row_vector(&self) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
+    pub fn value_as_row_vector(&self) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
+        self.data_as_row_vector(&self._value)
+    }
+    
+    pub fn derivative_as_row_vector(&self) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
+        self.data_as_row_vector(&self._derivative)
+    }
+    
+    fn data_as_row_vector(&self, data: &[FloatType]) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
         if self.tensor_type() != TensorType::Vector(VecOrientation::Row) {
             Err(TensorConversionError {
                 was_type: self.tensor_type(),
@@ -75,23 +91,39 @@ impl Tensor {
             })
         } else {
             let mut out = Vec::new();
-            self._value.iter().for_each(|&f| out.push(vec![f]));
+            data.iter().for_each(|&f| out.push(vec![f]));
             Ok(out)
         }
     }
 
-    pub fn as_col_vector(&self) -> Result<Vec<FloatType>, TensorConversionError> {
+    pub fn value_as_col_vector(&self) -> Result<Vec<FloatType>, TensorConversionError> {
+        self.data_as_col_vector(&self._value)
+    }
+    
+    pub fn derivative_as_col_vector(&self) -> Result<Vec<FloatType>, TensorConversionError> {
+        self.data_as_col_vector(&self._derivative)
+    }
+    
+    fn data_as_col_vector(&self, data: &[FloatType]) -> Result<Vec<FloatType>, TensorConversionError> {
         if self.tensor_type() != TensorType::Vector(VecOrientation::Column) {
             Err(TensorConversionError {
                 was_type: self.tensor_type(),
                 into_type: TensorType::Vector(VecOrientation::Column),
             })
         } else {
-            Ok(self._value.clone())
+            Ok(data.to_vec())
         }
     }
 
-    pub fn as_matrix(&self) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
+    pub fn value_as_matrix(&self) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
+        self.data_as_matrix(&self._value)
+    }
+    
+    pub fn derivative_as_matrix(&self) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
+        self.data_as_matrix(&self._derivative)
+    }
+    
+    fn data_as_matrix(&self, data: &[FloatType]) -> Result<Vec<Vec<FloatType>>, TensorConversionError> {
         if self.tensor_type() != TensorType::Matrix {
             Err(TensorConversionError {
                 was_type: self.tensor_type(),
@@ -102,7 +134,7 @@ impl Tensor {
             for i in 0..self._shape.0 {
                 let begin = i * self._shape.1;
                 let end = (i + 1) * self._shape.1;
-                out.push(self._value[begin..end].to_owned());
+                out.push(data[begin..end].to_owned());
             }
             Ok(out)
         }

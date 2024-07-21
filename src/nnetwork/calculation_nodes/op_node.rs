@@ -133,19 +133,20 @@ fn operate_unary_same_shape<F: FnMut((&FloatType, &mut FloatType))>(
 }
 
 // Helper function for unary operators returning same shape as input
-fn back_propagate_unary_same_shape<F: Fn((FloatType, (FloatType, FloatType))) -> FloatType>(
+fn back_propagate_unary_same_shape<F: Fn((FloatType, FloatType)) -> FloatType>(
     inp: &[TensorShared],
     out: &TensorShared,
     dfdx: F,
 ) {
+    // Can I utilize std::men::take or RefCell::replace in order to zip and iterate?
     let inp = &inp[0];
     let size = inp.borrow()._value.len();
     for i in 0..size {
         let derivative = (dfdx)((
             inp.borrow()._value[i],
-            (out.borrow()._value[i], out.borrow()._derivative[i]),
+            out.borrow()._value[i],
         ));
-        inp.borrow_mut()._derivative[i] += derivative;
+        inp.borrow_mut()._derivative[i] += derivative * out.borrow()._derivative[i];
     }
 }
 
@@ -161,8 +162,8 @@ impl Operator for ExpOp {
     }
 
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
-        back_propagate_unary_same_shape(inp, out, |(_inp_val, (out_val, chain_derivative))| {
-            out_val * chain_derivative
+        back_propagate_unary_same_shape(inp, out, |(_inp_val, out_val)| {
+            out_val
         })
     }
 
@@ -187,8 +188,8 @@ impl Operator for LogOp {
     }
 
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
-        back_propagate_unary_same_shape(inp, out, |(inp_val, (_out_val, chain_derivative))| {
-            chain_derivative / inp_val
+        back_propagate_unary_same_shape(inp, out, |(inp_val, _out_val)| {
+            1.0 / inp_val
         })
     }
 
@@ -212,7 +213,9 @@ impl Operator for NegOp {
     }
 
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
-        back_propagate_unary_same_shape(inp, out, |(_, (_, _))| -1.)
+        back_propagate_unary_same_shape(inp, out, |(_inp_val, _out_val)| {
+            -1.
+        })
     }
 
     fn symbol(&self) -> &str {
@@ -357,6 +360,7 @@ impl Operator for MulOp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assert_approx_eq::assert_approx_eq;
 
     #[test]
     fn addition_of_two_scalars() {
@@ -369,7 +373,7 @@ mod tests {
             .unwrap()
             .perform_operation();
         println!("{:?}", out.borrow()._value);
-        assert_eq!(out.borrow().as_scalar().unwrap(), 3.);
+        assert_eq!(out.borrow().value_as_scalar().unwrap(), 3.);
     }
 
     #[test]
@@ -381,7 +385,7 @@ mod tests {
             .as_ref()
             .unwrap()
             .perform_operation();
-        assert_eq!(out.borrow().as_scalar().unwrap(), 2.);
+        assert_eq!(out.borrow().value_as_scalar().unwrap(), 2.);
     }
 
     #[test]
@@ -394,7 +398,7 @@ mod tests {
         let out = OpNode::add(&inp1, &inp2);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
-        assert_eq!(out.borrow().as_col_vector().unwrap(), expected_value);
+        assert_eq!(out.borrow().value_as_col_vector().unwrap(), expected_value);
         calc.back_propagation();
         assert_eq!(out.borrow().derivative(), vec![1., 1.]);
         assert_eq!(inp1.borrow().derivative(), expected_derivative1);
@@ -409,7 +413,7 @@ mod tests {
         let out = OpNode::sum(&inp);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
-        assert_eq!(out.borrow().as_scalar().unwrap(), expected_value);
+        assert_eq!(out.borrow().value_as_scalar().unwrap(), expected_value);
         calc.back_propagation();
         assert_eq!(out.borrow().derivative(), vec![1.]);
         assert_eq!(inp.borrow().derivative(), expected_derivative);
@@ -425,7 +429,7 @@ mod tests {
         let out = OpNode::mul(&inp1, &inp2);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
-        assert_eq!(out.borrow().as_col_vector().unwrap(), expected_value);
+        assert_eq!(out.borrow().value_as_col_vector().unwrap(), expected_value);
         calc.back_propagation();
         assert_eq!(out.borrow().derivative(), vec![1., 1.]);
         assert_eq!(inp1.borrow().derivative(), expected_derivative1);
@@ -440,7 +444,7 @@ mod tests {
         let out = OpNode::prod(&inp);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
-        assert_eq!(out.borrow().as_scalar().unwrap(), expected_value);
+        assert_eq!(out.borrow().value_as_scalar().unwrap(), expected_value);
         calc.back_propagation();
         assert_eq!(out.borrow().derivative(), vec![1.]);
         assert_eq!(inp.borrow().derivative(), expected_derivative);
@@ -456,7 +460,7 @@ mod tests {
         let out = OpNode::pow(&inp1, &inp2);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
-        assert_eq!(out.borrow().data(), expected_value);
+        assert_eq!(out.borrow().value(), expected_value);
         calc.back_propagation();
         assert_eq!(out.borrow().derivative(), vec![1., 1.]);
         assert_eq!(inp1.borrow().derivative(), expected_derivative1);
@@ -472,7 +476,7 @@ mod tests {
         let out = OpNode::neg(&inp);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
-        assert_eq!(out.borrow().data(), expected_value);
+        assert_eq!(out.borrow().value(), expected_value);
         calc.back_propagation();
         assert_eq!(out.borrow().derivative(), vec![1., 1., 1., 1.]);
         assert_eq!(inp.borrow().derivative(), expected_derivative);
@@ -487,7 +491,7 @@ mod tests {
         let out = OpNode::log(&inp);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
-        assert_eq!(out.borrow().data(), expected_value);
+        assert_eq!(out.borrow().value(), expected_value);
         calc.back_propagation();
         assert_eq!(out.borrow().derivative(), vec![1., 1., 1., 1.]);
         assert_eq!(inp.borrow().derivative(), expected_derivative);
@@ -502,9 +506,37 @@ mod tests {
         let out = OpNode::exp(&inp);
         let calc = NetworkCalculation::new(&out);
         calc.forward();
-        assert_eq!(out.borrow().data(), expected_value);
+        assert_eq!(out.borrow().value(), expected_value);
         calc.back_propagation();
         assert_eq!(out.borrow().derivative(), vec![1., 1., 1., 1.]);
         assert_eq!(inp.borrow().derivative(), expected_derivative);
+    }
+
+    #[test]
+    fn long_expression() {
+        let a = Tensor::from_scalar(1.0);
+        let b = Tensor::from_scalar(-1.0);
+        let c = Tensor::from_scalar(1.0);
+        let c2 = Tensor::from_scalar(2.0);
+        let c3 = Tensor::from_scalar(3.0);
+        let d = OpNode::add(&OpNode::add(&a, &b), &OpNode::neg(&OpNode::mul(&c, &c2)));
+        let e = OpNode::pow(&OpNode::neg(&d), &c3);
+        let f = OpNode::log(&e);
+        let g = OpNode::exp(&f);
+
+        let calc = NetworkCalculation::new(&g);
+        calc.forward();
+        assert_approx_eq!(d.borrow().value_as_scalar().unwrap(), -2.);
+        assert_approx_eq!(e.borrow().value_as_scalar().unwrap(), 8.);
+        assert_approx_eq!(f.borrow().value_as_scalar().unwrap(), 8f64.ln());
+        assert_approx_eq!(g.borrow().value_as_scalar().unwrap(), 8.);
+        calc.back_propagation();
+        assert_approx_eq!(g.borrow().derivative_as_scalar().unwrap(), 1.);
+        assert_approx_eq!(f.borrow().derivative_as_scalar().unwrap(), 8.);
+        assert_approx_eq!(e.borrow().derivative_as_scalar().unwrap(), 1.);
+        assert_approx_eq!(d.borrow().derivative_as_scalar().unwrap(), -12.);
+        assert_approx_eq!(c.borrow().derivative_as_scalar().unwrap(), 24.);
+        assert_approx_eq!(b.borrow().derivative_as_scalar().unwrap(), -12.);
+        assert_approx_eq!(a.borrow().derivative_as_scalar().unwrap(), -12.);
     }
 }
