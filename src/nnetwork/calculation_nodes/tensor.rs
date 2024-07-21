@@ -1,6 +1,6 @@
 use std::{f64::NAN, fmt::Display, ops::{Add, Div, Mul, Neg, Sub}};
 
-use op_node::{AddOp, ExpOp, LogOp, MulOp, NegOp, PowOp, ProdOp, SumOp};
+use op_node::{AddOp, DotOp, ExpOp, LogOp, MulOp, NegOp, PowOp, ProdOp, SumOp};
 
 use super::*;
 
@@ -235,6 +235,9 @@ impl TensorShared {
     pub fn len(&self) -> usize {
         self.borrow().len()
     }
+    pub fn shape(&self) -> TensorShape {
+        self.borrow()._shape
+    }
     pub fn tensor_type(&self) -> TensorType {
         match self.borrow()._shape {
             (0, 0, 0) => {
@@ -268,37 +271,41 @@ impl TensorShared {
 // Operations
 impl TensorShared {
     pub fn exp(&self) -> TensorShared {
-        OpNode::new_op(Box::new(ExpOp {}), vec![self.clone()])
+        OpNode::new_op(Box::new(ExpOp {}), vec![self.clone()], true)
     }
     
     pub fn log(&self) -> TensorShared {
-        OpNode::new_op(Box::new(LogOp {}), vec![self.clone()])
+        OpNode::new_op(Box::new(LogOp {}), vec![self.clone()], true)
     }
     
     pub fn inv(&self) -> TensorShared {
-        OpNode::new_op(Box::new(PowOp {}), vec![self.clone(), TensorShared::from_vector(vec![-1.;self.len()], self.borrow()._shape)])
+        OpNode::new_op(Box::new(PowOp {}), vec![self.clone(), TensorShared::from_vector(vec![-1.;self.len()], self.borrow()._shape)], true)
     }
     
     pub fn pow(&self, rhs: &TensorShared) -> TensorShared {
-        OpNode::new_op(Box::new(PowOp {}), vec![self.clone(), rhs.clone()])
+        OpNode::new_op(Box::new(PowOp {}), vec![self.clone(), rhs.clone()], true)
     }
     
     pub fn sum(&self) -> TensorShared {
         // Sum adds all elements in a tensor together. Implemented as a variant of Add.
-        OpNode::new_op(Box::new(SumOp {}), vec![self.clone()])
+        OpNode::new_op(Box::new(SumOp {}), vec![self.clone()], true)
     }
 
     pub fn product(&self) -> TensorShared {
         // Prod multiplies all elements in a tensor together. Implemented as a unary variant of Mul.
-        OpNode::new_op(Box::new(ProdOp {}), vec![self.clone()])
+        OpNode::new_op(Box::new(ProdOp {}), vec![self.clone()], true)
     }
     
     pub fn add_many(inp: &[TensorShared]) -> TensorShared {
-        OpNode::new_op(Box::new(AddOp {}), inp.to_owned())
+        OpNode::new_op(Box::new(AddOp {}), inp.to_owned(), true)
     }
     
     pub fn mul_many(inp: &[TensorShared]) -> TensorShared {
-        OpNode::new_op(Box::new(MulOp {}), inp.to_owned())
+        OpNode::new_op(Box::new(MulOp {}), inp.to_owned(), true)
+    }
+    
+    pub fn dot(&self, rhs: &TensorShared) -> TensorShared {
+        OpNode::new_op(Box::new(DotOp {}), vec![self.clone(), rhs.clone()], false)
     }
 }
 
@@ -313,7 +320,7 @@ impl Neg for &TensorShared{
     type Output = TensorShared;
 
     fn neg(self) -> Self::Output {
-        OpNode::new_op(Box::new(NegOp {}), vec![self.clone()])
+        OpNode::new_op(Box::new(NegOp {}), vec![self.clone()], true)
     }
 }
 impl Add for TensorShared{
@@ -327,7 +334,7 @@ impl Add for &TensorShared{
     type Output = TensorShared;
 
     fn add(self, rhs: Self) -> Self::Output {
-        OpNode::new_op(Box::new(AddOp {}), vec![self.clone(),rhs.clone()])
+        OpNode::new_op(Box::new(AddOp {}), vec![self.clone(),rhs.clone()], true)
     }
 }
 impl Sub for TensorShared{
@@ -341,7 +348,7 @@ impl Sub for &TensorShared{
     type Output = TensorShared;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        OpNode::new_op(Box::new(AddOp {}), vec![self.clone(),-rhs])
+        OpNode::new_op(Box::new(AddOp {}), vec![self.clone(),-rhs], true)
     }
 }
 impl Mul for TensorShared{
@@ -355,7 +362,7 @@ impl Mul for &TensorShared{
     type Output = TensorShared;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        OpNode::new_op(Box::new(MulOp {}), vec![self.clone(),rhs.clone()])
+        OpNode::new_op(Box::new(MulOp {}), vec![self.clone(),rhs.clone()], true)
     }
 }
 impl Div for TensorShared{
@@ -369,7 +376,7 @@ impl Div for &TensorShared{
     type Output = TensorShared;
 
     fn div(self, rhs: Self) -> Self::Output {
-        OpNode::new_op(Box::new(MulOp {}), vec![self.clone(),rhs.inv()])
+        OpNode::new_op(Box::new(MulOp {}), vec![self.clone(),rhs.inv()], true)
     }
 }
 

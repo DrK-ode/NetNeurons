@@ -20,8 +20,12 @@ impl OpNode {
         }
     }
 
-    pub fn new_op(op: Box<dyn Operator>, inp: Vec<TensorShared>) -> TensorShared {
-        Self::check_size_and_shape(&inp, true);
+    pub fn new_op(
+        op: Box<dyn Operator>,
+        inp: Vec<TensorShared>,
+        same_input_shapes: bool,
+    ) -> TensorShared {
+        Self::check_size_and_shape(&inp, same_input_shapes);
         let out = TensorShared::from_shape(op.output_shape(&inp).unwrap());
         let op = Rc::new(OpNode {
             _op: op,
@@ -327,6 +331,59 @@ impl Operator for ProdOp {
     }
 }
 
+pub struct DotOp {}
+impl Operator for DotOp {
+    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
+        let lhs = &inp[0].borrow()._value;
+        let rhs = &inp[1].borrow()._value;
+        
+        let lhs_rows = inp[0].shape().0;
+        let lhs_cols = inp[0].shape().1;
+        let rhs_rows = inp[1].shape().0;
+        let rhs_cols = inp[1].shape().1;
+        let out_rows = rhs_cols;
+        let out_cols = lhs_rows;
+
+        for (n, mat_elem) in out.borrow_mut()._value.iter_mut().enumerate() {
+            let r = n / out_cols;
+            let c = n % out_cols;
+            let lhs_row = lhs.iter().skip(r * lhs_cols).take(lhs_cols);
+            let rhs_col = rhs.iter().skip(c).step_by(rhs_cols).take(rhs_rows);
+            println!("{}  {}",out_rows,lhs_row.clone().count());
+            println!("{}  {}",out_cols,rhs_col.clone().count());
+            *mat_elem = lhs_row.zip(rhs_col).map(|(&r, &c)| {
+                println!("({}, {})",r,c);
+                r * c
+            }).sum();
+        }
+    }
+
+    fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
+        todo!()
+    }
+
+    fn symbol(&self) -> &str {
+        "⋅"
+    }
+
+    fn output_shape(&self, input: &[TensorShared]) -> Option<TensorShape> {
+        if input.len() == 2 {
+            let shape1 = input[0].borrow()._shape;
+            let shape2 = input[1].borrow()._shape;
+            if shape1.0 > 0
+                && shape1.1 > 0
+                && shape1.2 == 1
+                && shape2.0 == shape1.1
+                && shape2.1 > 0
+                && shape2.2 == 1
+            {
+                return Some((shape1.0, shape2.1, 1));
+            }
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -489,7 +546,7 @@ mod tests {
         let c = TensorShared::from_scalar(1.0);
         let c2 = TensorShared::from_scalar(2.0);
         let c3 = TensorShared::from_scalar(3.0);
-        let d = &a+ &b -(&c * &c2);
+        let d = &a + &b - (&c * &c2);
         let e = (-&d).pow(&c3);
         let f = e.log();
         let g = f.exp();
@@ -508,5 +565,22 @@ mod tests {
         assert_approx_eq!(c.derivative_as_scalar().unwrap(), 24.);
         assert_approx_eq!(b.derivative_as_scalar().unwrap(), -12.);
         assert_approx_eq!(a.derivative_as_scalar().unwrap(), -12.);
+    }
+
+    #[test]
+    fn dot_product_of_two_vectors() {
+        let inp1 = TensorShared::from_vector(vec![1., 2.], (1, 2, 1));
+        let inp2 = TensorShared::from_vector(vec![3., 4.], (2, 1, 1));
+        let expected_value = 11.;
+        let expected_derivative1 = vec![3., 4.];
+        let expected_derivative2 = vec![1., 2.];
+        let out = inp1.dot(&inp2);
+        let calc = NetworkCalculation::new(&out);
+        calc.forward();
+        assert_eq!(out.value_as_scalar().unwrap(), expected_value);
+        calc.back_propagation();
+        assert_eq!(out.derivative(), vec![1., 1.]);
+        assert_eq!(inp1.derivative(), expected_derivative1);
+        assert_eq!(inp2.derivative(), expected_derivative2);
     }
 }
