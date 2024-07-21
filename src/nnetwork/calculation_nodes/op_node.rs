@@ -336,25 +336,13 @@ impl Operator for DotOp {
     fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
         let lhs = &inp[0].borrow()._value;
         let rhs = &inp[1].borrow()._value;
-        
-        let lhs_rows = inp[0].shape().0;
-        let lhs_cols = inp[0].shape().1;
-        let rhs_rows = inp[1].shape().0;
-        let rhs_cols = inp[1].shape().1;
-        let out_rows = rhs_cols;
-        let out_cols = lhs_rows;
 
-        for (n, mat_elem) in out.borrow_mut()._value.iter_mut().enumerate() {
-            let r = n / out_cols;
-            let c = n % out_cols;
-            let lhs_row = lhs.iter().skip(r * lhs_cols).take(lhs_cols);
-            let rhs_col = rhs.iter().skip(c).step_by(rhs_cols).take(rhs_rows);
-            println!("{}  {}",out_rows,lhs_row.clone().count());
-            println!("{}  {}",out_cols,rhs_col.clone().count());
-            *mat_elem = lhs_row.zip(rhs_col).map(|(&r, &c)| {
-                println!("({}, {})",r,c);
-                r * c
-            }).sum();
+        let lhs_cols = inp[0].shape().1;
+
+        for (row, mat_elem) in out.borrow_mut()._value.iter_mut().enumerate() {
+            let lhs_row = lhs.iter().skip(row * lhs_cols).take(lhs_cols);
+            let rhs_col = rhs.iter().take(lhs_cols);
+            *mat_elem = lhs_row.zip(rhs_col).map(|(&r, &c)| r * c).sum();
         }
     }
 
@@ -367,6 +355,7 @@ impl Operator for DotOp {
     }
 
     fn output_shape(&self, input: &[TensorShared]) -> Option<TensorShape> {
+        // Matrix derivatives are hard so we only consider cases where the RHS is a column vector
         if input.len() == 2 {
             let shape1 = input[0].borrow()._shape;
             let shape2 = input[1].borrow()._shape;
@@ -374,7 +363,7 @@ impl Operator for DotOp {
                 && shape1.1 > 0
                 && shape1.2 == 1
                 && shape2.0 == shape1.1
-                && shape2.1 > 0
+                && shape2.1 == 1
                 && shape2.2 == 1
             {
                 return Some((shape1.0, shape2.1, 1));
