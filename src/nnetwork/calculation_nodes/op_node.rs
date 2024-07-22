@@ -331,48 +331,52 @@ impl Operator for ProdOp {
     }
 }
 
+// Does not support tensors larger than matrices
 pub struct DotOp {}
 impl Operator for DotOp {
     fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
         let lhs = &inp[0].borrow()._value;
         let rhs = &inp[1].borrow()._value;
 
-        let lhs_cols = inp[0].shape().1;
+        // (m x n) * (n x p) = (m x p)
+        let (_m, n, _) = inp[0].shape();
+        let (_, p, _) = inp[1].shape();
 
-        for (row, mat_elem) in out.borrow_mut()._value.iter_mut().enumerate() {
-            let lhs_row = lhs.iter().skip(row * lhs_cols).take(lhs_cols);
-            *mat_elem = lhs_row.zip(rhs).map(|(&r, c)| r * c).sum();
+        for (i, mat_elem) in out.borrow_mut()._value.iter_mut().enumerate() {
+            let row = i / p;
+            let col = i % p;
+            let lhs_row = lhs.iter().skip(row * n).take(n);
+            let rhs_col = rhs.iter().skip(col).step_by(p);
+
+            *mat_elem = lhs_row.zip(rhs_col).map(|(&r, &c)| r * c).sum();
         }
     }
 
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
-        let lhs_cols = inp[0].shape().1;
+        // (m x n) * (n x p) = (m x p)
+        let (_m, n, _) = inp[0].shape();
+        let (_, p, _) = inp[1].shape();
+        
+        for (i, &chain_derivative) in out.borrow()._derivative.iter().enumerate() {
+            let row = i / p;
+            let col = i % p;
+            {
+                // RHS derivative
+                let lhs = &inp[0].borrow()._value;
+                let rhs = &mut inp[1].borrow_mut()._derivative;
+                let lhs_row = lhs.iter().skip(row * n).take(n);
+                let rhs_col = rhs.iter_mut().skip(col).step_by(p);
+                rhs_col.zip(lhs_row).for_each(|(d, &v)| *d += v * chain_derivative);
+            }
 
-        for (row, chain_derivative) in out.borrow()._derivative.iter().enumerate() {
-            inp[1]
-                .borrow_mut()
-                ._derivative
-                .iter_mut()
-                .zip(
-                    inp[0]
-                        .borrow()
-                        ._value
-                        .iter()
-                        .skip(row * lhs_cols)
-                        .take(lhs_cols),
-                )
-                .for_each(|(d, v)| *d += v * chain_derivative);
-
-            inp[0]
-                .borrow_mut()
-                ._derivative
-                .iter_mut()
-                .skip(row * lhs_cols)
-                .take(lhs_cols)
-                .zip(&inp[1].borrow()._value)
-                .for_each(|(d, v)| {
-                    *d += v * chain_derivative;
-                });
+            {
+                // LHS derivative
+                let lhs = &mut inp[0].borrow_mut()._derivative;
+                let rhs = &inp[1].borrow()._value;
+                let lhs_row = lhs.iter_mut().skip(row * n).take(n);
+                let rhs_col = rhs.iter().skip(col).step_by(p);
+                lhs_row.zip(rhs_col).for_each(|(d, &v)| *d += v * chain_derivative);
+            }
         }
     }
 
@@ -381,7 +385,6 @@ impl Operator for DotOp {
     }
 
     fn output_shape(&self, input: &[TensorShared]) -> Option<TensorShape> {
-        // Matrix derivatives are hard so we only consider cases where the RHS is a column vector
         if input.len() == 2 {
             let shape1 = input[0].borrow()._shape;
             let shape2 = input[1].borrow()._shape;
@@ -389,7 +392,7 @@ impl Operator for DotOp {
                 && shape1.1 > 0
                 && shape1.2 == 1
                 && shape2.0 == shape1.1
-                && shape2.1 == 1
+                && shape2.1 > 0
                 && shape2.2 == 1
             {
                 return Some((shape1.0, shape2.1, 1));
@@ -420,12 +423,12 @@ mod tests {
 
     #[test]
     fn repeated_calculation() {
-        let mut inp1 = TensorShared::from_vector(vec![1., 2.], (2, 1, 1));
-        let mut inp2 = TensorShared::from_vector(vec![3., 4.], (2, 1, 1));
+        let inp1 = TensorShared::from_vector(vec![1., 2.], (2, 1, 1));
+        let inp2 = TensorShared::from_vector(vec![3., 4.], (2, 1, 1));
         let mut expected_value = vec![3., 8.];
         let mut expected_derivative1 = vec![3., 4.];
         let mut expected_derivative2 = vec![1., 2.];
-        
+
         let out = &inp1 * &inp2;
         let calc = NetworkCalculation::new(&out);
         calc.forward();
@@ -434,13 +437,13 @@ mod tests {
         assert_eq!(out.derivative(), vec![1., 1.]);
         assert_eq!(inp1.derivative(), expected_derivative1);
         assert_eq!(inp2.derivative(), expected_derivative2);
-        
-        inp1.borrow_mut()._value = vec![-1.,1.];
-        inp2.borrow_mut()._value = vec![2.,3.];
-        expected_value = vec![-2.,3.];
-        expected_derivative1 = vec![2.,3.];
-        expected_derivative2 = vec![-1.,1.];
-        
+
+        inp1.borrow_mut()._value = vec![-1., 1.];
+        inp2.borrow_mut()._value = vec![2., 3.];
+        expected_value = vec![-2., 3.];
+        expected_derivative1 = vec![2., 3.];
+        expected_derivative2 = vec![-1., 1.];
+
         calc.forward();
         assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
         calc.back_propagation();
@@ -645,5 +648,39 @@ mod tests {
         assert_eq!(out.derivative_as_col_vector().unwrap(), &[1., 1.]);
         assert_eq!(inp1.derivative(), expected_derivative1);
         assert_eq!(inp2.derivative(), expected_derivative2);
+    }
+
+    #[test]
+    fn matrix_multiplication_square_matrices() {
+        let inp1 = TensorShared::from_vector(vec![1., 2., 3., 4.], (2, 2, 1));
+        let inp2 = TensorShared::from_vector(vec![5., 6., 7., 8.], (2, 2, 1));
+        let expected_value = &[&[19., 22.], &[43., 50.]];
+        let expected_derivative1 = &[&[11., 15.], &[11., 15.]];
+        let expected_derivative2 = &[&[4., 4.], &[6., 6.]];
+        let out = inp1.dot(&inp2);
+        let calc = NetworkCalculation::new(&out);
+        calc.forward();
+        assert_eq!(out.value_as_matrix().unwrap(), expected_value);
+        calc.back_propagation();
+        assert_eq!(out.derivative_as_matrix().unwrap(), &[&[1., 1.], &[1., 1.]]);
+        assert_eq!(inp1.derivative_as_matrix().unwrap(), expected_derivative1);
+        assert_eq!(inp2.derivative_as_matrix().unwrap(), expected_derivative2);
+    }
+    
+    #[test]
+    fn matrix_multiplication_non_square_matrices() {
+        let inp1 = TensorShared::from_vector(vec![1., 2., 3., 4., 5., 6.], (2, 3, 1));
+        let inp2 = TensorShared::from_vector(vec![7., 8., 9., 10., 11., 12.], (3, 2, 1));
+        let expected_value = &[&[58., 64.], &[139., 154.]];
+        let expected_derivative1 = &[&[15., 19., 23.], &[15., 19., 23.]];
+        let expected_derivative2 = &[&[5., 5.], &[7., 7.], &[9.,9.]];
+        let out = inp1.dot(&inp2);
+        let calc = NetworkCalculation::new(&out);
+        calc.forward();
+        assert_eq!(out.value_as_matrix().unwrap(), expected_value);
+        calc.back_propagation();
+        assert_eq!(out.derivative_as_matrix().unwrap(), &[&[1., 1.], &[1., 1.]]);
+        assert_eq!(inp1.derivative_as_matrix().unwrap(), expected_derivative1);
+        assert_eq!(inp2.derivative_as_matrix().unwrap(), expected_derivative2);
     }
 }

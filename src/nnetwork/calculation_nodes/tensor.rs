@@ -213,12 +213,10 @@ impl TensorShared {
                 into_type: TensorType::Matrix,
             })
         } else {
+            let (n_rows, n_cols,_) = self.borrow()._shape;
             let mut out = Vec::new();
-            let shape = self.borrow()._shape;
-            for i in 0..shape.0 {
-                let begin = i * shape.1;
-                let end = (i + 1) * shape.1;
-                out.push(data[begin..end].to_owned());
+            for row in 0..n_rows {
+                out.push(data.iter().skip(row*n_cols).take(n_cols).copied().collect());
             }
             Ok(out)
         }
