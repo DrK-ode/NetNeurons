@@ -1,4 +1,4 @@
-use std::{f64::NAN, rc::Rc};
+use std::rc::Rc;
 
 use super::*;
 
@@ -341,13 +341,39 @@ impl Operator for DotOp {
 
         for (row, mat_elem) in out.borrow_mut()._value.iter_mut().enumerate() {
             let lhs_row = lhs.iter().skip(row * lhs_cols).take(lhs_cols);
-            let rhs_col = rhs.iter().take(lhs_cols);
-            *mat_elem = lhs_row.zip(rhs_col).map(|(&r, &c)| r * c).sum();
+            *mat_elem = lhs_row.zip(rhs).map(|(&r, c)| r * c).sum();
         }
     }
 
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
-        todo!()
+        let lhs_cols = inp[0].shape().1;
+
+        for (row, chain_derivative) in out.borrow()._derivative.iter().enumerate() {
+            inp[1]
+                .borrow_mut()
+                ._derivative
+                .iter_mut()
+                .zip(
+                    inp[0]
+                        .borrow()
+                        ._value
+                        .iter()
+                        .skip(row * lhs_cols)
+                        .take(lhs_cols),
+                )
+                .for_each(|(d, v)| *d += v * chain_derivative);
+
+            inp[0]
+                .borrow_mut()
+                ._derivative
+                .iter_mut()
+                .skip(row * lhs_cols)
+                .take(lhs_cols)
+                .zip(&inp[1].borrow()._value)
+                .for_each(|(d, v)| {
+                    *d += v * chain_derivative;
+                });
+        }
     }
 
     fn symbol(&self) -> &str {
@@ -390,6 +416,37 @@ mod tests {
         assert_eq!(out.derivative_as_scalar().unwrap(), 1.);
         assert_eq!(inp1.derivative_as_scalar().unwrap(), 1.);
         assert_eq!(inp2.derivative_as_scalar().unwrap(), 1.);
+    }
+
+    #[test]
+    fn repeated_calculation() {
+        let mut inp1 = TensorShared::from_vector(vec![1., 2.], (2, 1, 1));
+        let mut inp2 = TensorShared::from_vector(vec![3., 4.], (2, 1, 1));
+        let mut expected_value = vec![3., 8.];
+        let mut expected_derivative1 = vec![3., 4.];
+        let mut expected_derivative2 = vec![1., 2.];
+        
+        let out = &inp1 * &inp2;
+        let calc = NetworkCalculation::new(&out);
+        calc.forward();
+        assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
+        calc.back_propagation();
+        assert_eq!(out.derivative(), vec![1., 1.]);
+        assert_eq!(inp1.derivative(), expected_derivative1);
+        assert_eq!(inp2.derivative(), expected_derivative2);
+        
+        inp1.borrow_mut()._value = vec![-1.,1.];
+        inp2.borrow_mut()._value = vec![2.,3.];
+        expected_value = vec![-2.,3.];
+        expected_derivative1 = vec![2.,3.];
+        expected_derivative2 = vec![-1.,1.];
+        
+        calc.forward();
+        assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
+        calc.back_propagation();
+        assert_eq!(out.derivative(), vec![1., 1.]);
+        assert_eq!(inp1.derivative(), expected_derivative1);
+        assert_eq!(inp2.derivative(), expected_derivative2);
     }
 
     #[test]
@@ -568,7 +625,24 @@ mod tests {
         calc.forward();
         assert_eq!(out.value_as_scalar().unwrap(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1., 1.]);
+        assert_eq!(out.derivative_as_scalar().unwrap(), 1.);
+        assert_eq!(inp1.derivative(), expected_derivative1);
+        assert_eq!(inp2.derivative(), expected_derivative2);
+    }
+
+    #[test]
+    fn matrix_multiplication_with_vector() {
+        let inp1 = TensorShared::from_vector(vec![1., 2., 3., 4.], (2, 2, 1));
+        let inp2 = TensorShared::from_vector(vec![5., 6.], (2, 1, 1));
+        let expected_value = vec![17., 39.];
+        let expected_derivative1 = vec![5., 6., 5., 6.];
+        let expected_derivative2 = vec![4., 6.];
+        let out = inp1.dot(&inp2);
+        let calc = NetworkCalculation::new(&out);
+        calc.forward();
+        assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
+        calc.back_propagation();
+        assert_eq!(out.derivative_as_col_vector().unwrap(), &[1., 1.]);
         assert_eq!(inp1.derivative(), expected_derivative1);
         assert_eq!(inp2.derivative(), expected_derivative2);
     }
