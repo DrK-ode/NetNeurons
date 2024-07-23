@@ -1,9 +1,23 @@
 use std::{cell::RefCell, fmt::Debug, ops::Deref, rc::Rc};
 
-type FloatType = f64;
-type TensorShape = (usize,usize,usize);
-//pub type TensorShared = Rc<RefCell<Tensor>>;
+pub type FloatType = f64;
+pub type TensorShape = (usize,usize,usize);
 pub type OpNodeShared = Rc<OpNode>;
+
+#[derive(Debug, PartialEq)]
+pub enum VecOrientation {
+    Column,
+    Row,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TensorType {
+    None,
+    Scalar,
+    Vector(VecOrientation),
+    Matrix,
+    Tensor,
+}
 
 #[derive(Debug,Default,Clone)]
 pub struct TensorShared{
@@ -20,7 +34,7 @@ pub struct Tensor {
 }
 
 pub trait Operator {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared);
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared);
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared);
     fn symbol(&self) -> &str;
     fn output_shape(&self, input: &[TensorShared]) -> Option<TensorShape>;
@@ -32,7 +46,7 @@ pub struct OpNode {
     _out: TensorShared,
 }
 
-struct NetworkCalculation {
+pub struct NetworkCalculation {
     _op_order: Vec<OpNodeShared>,
 }
 

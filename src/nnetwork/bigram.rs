@@ -1,10 +1,9 @@
 use std::{str::FromStr, time::Instant};
 
 use super::{
-    char_set::CharSetError, mlp::VectorFunctionLayer, CharSet, ElementFunctionLayer, Forward,
-    GradVal, GradValVec, LinearLayer, MLP,
+    calculation_nodes::TensorShared, char_set::CharSetError, CharSet, ElementFunctionLayer, LinearLayer, MLP
 };
-use crate::{data_set::DataSet, nnetwork::Parameters};
+use crate::{data_set::DataSet, nnetwork::{calculation_nodes::{FloatType, NetworkCalculation}, Parameters}};
 
 pub struct Bigram {
     _data: DataSet,
@@ -21,13 +20,13 @@ impl Bigram {
         for i in 1..=number_of_layers {
             mlp.add_layer(Box::new(LinearLayer::from_rand(n_chars, n_chars, true)));
             if i != number_of_layers {
-                mlp.add_layer(Box::new(ElementFunctionLayer::new(
+                mlp.add_layer(Box::new(FunctionLayer::new(
                     &GradVal::sigmoid,
                     "Sigmoid",
                 )));
             }
         }
-        mlp.add_layer(Box::new(VectorFunctionLayer::new(
+        mlp.add_layer(Box::new(FunctionLayer::new(
             &GradValVec::soft_max,
             "SoftMax",
         )));
@@ -39,7 +38,7 @@ impl Bigram {
         }
     }
 
-    fn extract_correlations(&self, data_block: &str) -> Vec<(GradValVec, GradValVec)> {
+    fn extract_correlations(&self, data_block: &str) -> Vec<(TensorShared, TensorShared)> {
         data_block
             .chars()
             .zip(data_block.chars().skip(1))
@@ -59,19 +58,19 @@ impl Bigram {
     pub fn learn(
         &mut self,
         cycles: usize,
-        learning_rate: f32,
+        learning_rate: FloatType,
         data_block_size: usize,
-        regularization: Option<f32>,
+        regularization: Option<FloatType>,
     ) {
         let timer = Instant::now();
         for n in 0..cycles {
             let training_data = self._data.get_training_block(data_block_size);
             let input_pairs = self.extract_correlations(training_data);
 
-            let fit_loss: GradVal = input_pairs
+            let fit_loss = input_pairs
                 .iter()
-                .map(|(inp, truth)| self._mlp.forward(&inp).maximum_likelihood(truth))
-                .sum::<GradVal>()
+                .map(|(inp, truth)| self._mlp.forward_through_layers(&inp).maximum_likelihood(truth))
+                .sum()
                 / (data_block_size as f32).into();
 
             let reg_loss = if regularization.is_some() {
@@ -79,13 +78,12 @@ impl Bigram {
                 if regularization < 0. {
                     panic!("Regularization coefficient must be positive.");
                 }
-                let n_param = GradVal::from(self._mlp.parameters().count() as f32);
+                let n_param = TensorShared::from_scalar(self._mlp.parameters().count() as FloatType);
                 // Mean of the sum of the squares of all parameters
-                self._mlp
+                TensorShared::add_many(&self._mlp
                     .parameters()
-                    .map(|p| p.powf(2.))
-                    .collect::<GradValVec>()
-                    .sum()
+                    .map(|p| p.pow(&TensorShared::from_scalar(2.)))
+                    .collect::<Vec<_>>() )
                     * regularization.into()
                     / n_param
             } else {
@@ -93,11 +91,19 @@ impl Bigram {
             };
 
             let mut loss = fit_loss + reg_loss;
+            
+            let calc = NetworkCalculation::new(loss);
+            calc.evaluate();
+            calc.back_propagation();
 
-            self._mlp.decend_grad(&mut loss, learning_rate);
+            self._mlp.decend_grad(learning_rate);
             println!("Cycle {n} loss: {:e}", loss.value());
         }
-        println!("Trained network with {} parameters for {cycles} cycles in {} ms.", self._mlp.parameters().count(), timer.elapsed().as_millis() );
+        println!(
+            "Trained network with {} parameters for {cycles} cycles in {} ms.",
+            self._mlp.parameters().count(),
+            timer.elapsed().as_millis()
+        );
     }
 
     pub fn predict(
@@ -111,7 +117,7 @@ impl Bigram {
         }
         let mut last_char = self._charset.encode(s.chars().last().unwrap())?;
         for _ in 0..number_of_characters {
-            last_char = self._mlp.forward(&last_char).collapsed();
+            last_char = self._mlp.forward_through_layers(&last_char).collapsed();
             s.push(self._charset.decode(&last_char)?);
         }
         Ok(s)

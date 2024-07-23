@@ -1,54 +1,52 @@
 use std::fmt::Display;
 
-use crate::nnetwork::{GradVal, GradValVec};
+use crate::nnetwork::calculation_nodes::{FloatType, NetworkCalculation, TensorShared};
 
-use super::{neural_layers::Layer, neural_traits::Forward, neural_traits::Parameters};
+use super::neural_traits::{Layer, Parameters};
 
 pub struct MLP {
     _layers: Vec<Box<dyn Layer>>,
+    _calc: Option<NetworkCalculation>,
 }
 
 impl MLP {
     pub fn from_empty() -> MLP {
         MLP {
             _layers: Vec::new(),
-        }
-    }
-
-    pub fn from_vec(layers: Vec<Box<dyn Layer>>) -> MLP {
-        if layers.len() > 0 {
-            return MLP::from_empty();
-        }
-        Self::check_layers(&layers);
-        MLP { _layers: layers }
-    }
-
-    fn check_layers(layers: &Vec<Box<dyn Layer>>) {
-        let mut nin: Option<usize> = None;
-        for (i, l) in layers.iter().enumerate() {
-            if let Some(n2) = l.size_in() {
-                if let Some(n1) = nin {
-                    assert_eq!(
-                        n1, n2,
-                        "Layer with index {i} should have had size {n1} but {n2} was found."
-                    );
-                }
-                nin = l.size_out();
-            }
+            _calc: None,
         }
     }
 
     pub fn add_layer(&mut self, layer: Box<dyn Layer>) {
         self._layers.push(layer);
-        Self::check_layers(&self._layers);
     }
 
-    pub fn decend_grad(&mut self, loss: &mut GradVal, learning_rate: f32) {
-        loss.backward();
-        self.parameters().for_each(|p: &mut GradVal| {
-            p.set_value(p.value() - learning_rate * p.grad().unwrap());
-        });
+    pub fn decend_grad(&mut self, learning_rate: FloatType) {
+        self.parameters().for_each(|p| p.decend_grad(learning_rate));
     }
+
+    pub fn forward_through_layers(&mut self, inp: &TensorShared) -> TensorShared {
+        let mut out = inp.clone();
+
+        for l in &self._layers {
+            out = l.forward(&out);
+        }
+        out
+    }
+
+    /*pub fn perform_calculation(&self) {
+    let timer = Instant::now();
+    self._calc = Some(NetworkCalculation::new(&out));
+    println!("Topological sorting took {} µs", timer.elapsed().as_micros());
+    assert!(self._calc.is_some(), "Cannot perform calculation before it is constructed");
+    let calc = self._calc.as_ref().unwrap();
+    let timer = Instant::now();
+    self._calc_result = Some(calc.evaluate());
+    println!("Performing calculation took {} µs", timer.elapsed().as_micros());
+    let timer = Instant::now();
+    calc.back_propagation();
+    println!("Back propagation took {} µs", timer.elapsed().as_micros());
+    }*/
 }
 
 impl Display for MLP {
@@ -61,22 +59,9 @@ impl Display for MLP {
     }
 }
 
-impl Forward for MLP {
-    type Output = GradValVec;
-    fn forward(&self, prev: &GradValVec) -> GradValVec {
-        let mut output = Vec::<f32>::into(Vec::new());
-        let mut input = prev;
-
-        for l in &self._layers {
-            output = l.forward(input);
-            input = &output;
-        }
-        return output;
-    }
-}
 impl Parameters for MLP {
-    fn parameters(&mut self) -> Box<dyn Iterator<Item = &mut GradVal> + '_> {
-        Box::new(self._layers.iter_mut().map(|l| l.parameters()).flatten())
+    fn parameters(&self) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
+        Box::new(self._layers.iter().map(|l| l.parameters()).flatten())
     }
 }
 
@@ -89,26 +74,21 @@ mod tests {
     #[test]
     fn mlp_forward() {
         let mut mlp = MLP::from_empty();
-        mlp.add_layer(Box::new(LinearLayer::from_vec(vec![
-            Neuron::from_value(1., 2, None),
-            Neuron::from_value(1., 2, None),
-            Neuron::from_value(1., 2, None),
-        ])));
-        mlp.add_layer(Box::new(LinearLayer::from_vec(vec![
-            Neuron::from_value(1., 3, None),
-            Neuron::from_value(1., 3, None),
-            Neuron::from_value(1., 3, None),
-        ])));
-        mlp.add_layer(Box::new(LinearLayer::from_vec(vec![
-            Neuron::from_value(1., 3, None),
-            Neuron::from_value(1., 3, None),
-        ])));
-        let input = GradValVec::from(vec![GradVal::from(1.0), GradVal::from(2.0)]);
-        let output = mlp.forward(&input);
-        println!("{input}, {output}");
-        assert_eq!(
-            output,
-            GradValVec::from(vec![GradVal::from(27.0), GradVal::from(27.0)])
-        );
+        mlp.add_layer(Box::new(LinearLayer::from_tensors(
+            TensorShared::from_vector(vec![1., 1., 1., 1., 1., 1.], (3, 2, 1)),
+            None,
+        )));
+        mlp.add_layer(Box::new(LinearLayer::from_tensors(
+            TensorShared::from_vector(vec![1., 1., 1., 1., 1., 1., 1., 1., 1.], (3, 3, 1)),
+            None,
+        )));
+        mlp.add_layer(Box::new(LinearLayer::from_tensors(
+            TensorShared::from_vector(vec![1., 1., 1., 1., 1., 1.], (2, 3, 1)),
+            None,
+        )));
+        let inp = TensorShared::from_vector(vec![1., 2.], (2, 1, 1));
+        let output = mlp.forward_through_layers(&inp);
+        println!("{inp}, {output}");
+        assert_eq!(output.value_as_col_vector().unwrap(), vec![27., 27.]);
     }
 }

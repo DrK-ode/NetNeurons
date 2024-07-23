@@ -9,7 +9,7 @@ impl NetworkCalculation {
         }
     }
 
-    pub fn forward(&self) -> TensorShared {
+    pub fn evaluate(&self) -> TensorShared {
         self._op_order.iter().for_each(|op| op.perform_operation());
         self._op_order.last().unwrap()._out.clone()
     }

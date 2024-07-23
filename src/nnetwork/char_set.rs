@@ -1,11 +1,11 @@
 use std::{fmt::Display, str::FromStr};
 
-use super::{GradVal, GradValVec};
+use super::calculation_nodes::{FloatType, TensorShared, TensorType, VecOrientation};
 
 #[derive(Debug, PartialEq)]
 pub enum CharSetError {
     EncodingError(char),
-    DecodingVectorError(Vec<f32>),
+    DecodingVectorError(Vec<FloatType>),
     DecodingIndexError(usize),
     CreationError,
 }
@@ -47,16 +47,20 @@ impl CharSet {
         self._characters.len()
     }
 
-    pub fn decode(&self, vector: &GradValVec) -> Result<char, CharSetError> {
+    pub fn decode(&self, vector: &TensorShared) -> Result<char, CharSetError> {
+        if vector.tensor_type() != TensorType::Vector(VecOrientation::Column) {
+            panic!("Can only decode column vectors.");
+        }
         let index: Vec<usize> = vector
+            .value()
             //.column(0)
             .iter()
             .enumerate()
-            .filter_map(|(n, elem)| if elem.value() > 0. { Some(n) } else { None })
+            .filter_map(|(n, &elem)| if elem > 0. { Some(n) } else { None })
             .collect();
         if index.len() != 1 {
             return Err(CharSetError::DecodingVectorError(
-                vector.iter().map(|v| v.value()).collect(),
+                vector.value().iter().copied().collect(),
             ));
         }
         let index = index[0];
@@ -67,22 +71,23 @@ impl CharSet {
         .copied()
     }
 
-    pub fn decode_string(&self, v: Vec<GradValVec>) -> Result<String, CharSetError> {
+    pub fn decode_string(&self, v: &[&TensorShared]) -> Result<String, CharSetError> {
         v.iter().map(|v| self.decode(v)).collect()
     }
 
-    pub fn encode(&self, c: char) -> Result<GradValVec, CharSetError> {
+    pub fn encode(&self, c: char) -> Result<TensorShared, CharSetError> {
         let n = self
             ._characters
             .iter()
             .position(|k| c == *k)
             .ok_or_else(|| CharSetError::EncodingError(c))?;
-        let mut vector = vec![GradVal::from(0.); self._characters.len()];
-        vector[n] = GradVal::from(1.);
-        Ok(vector.into())
+        let size = self._characters.len();
+        let mut vector = vec![0.; size];
+        vector[n] = 1.;
+        Ok(TensorShared::from_vector(vector, (size, 1, 1)))
     }
 
-    pub fn encode_string(&self, s: &str) -> Result<Vec<GradValVec>, CharSetError> {
+    pub fn encode_string(&self, s: &str) -> Result<Vec<TensorShared>, CharSetError> {
         s.chars().map(|c| self.encode(c)).collect()
     }
 }
@@ -138,16 +143,26 @@ mod tests {
     #[test]
     fn encode_a() {
         assert_eq!(
-            CharSet::from_str("abc").unwrap().encode('a').unwrap(),
-            GradValVec::from(vec![1., 0., 0.])
+            CharSet::from_str("abc")
+                .unwrap()
+                .encode('a')
+                .unwrap()
+                .value_as_col_vector()
+                .unwrap(),
+            &[1., 0., 0.]
         );
     }
 
     #[test]
     fn encode_c() {
         assert_eq!(
-            CharSet::from_str("abc").unwrap().encode('c').unwrap(),
-            GradValVec::from(vec![0., 0., 1.])
+            CharSet::from_str("abc")
+                .unwrap()
+                .encode('c')
+                .unwrap()
+                .value_as_col_vector()
+                .unwrap(),
+            &[0., 0., 1.]
         );
     }
 
@@ -157,19 +172,20 @@ mod tests {
             CharSet::from_str("cab")
                 .unwrap()
                 .encode_string("abc")
-                .unwrap(),
-            vec!(
-                GradValVec::from(vec![1., 0., 0.]),
-                GradValVec::from(vec![0., 1., 0.]),
-                GradValVec::from(vec![0., 0., 1.])
-            )
+                .unwrap()
+                .iter()
+                .map(|v| v.value_as_col_vector().unwrap())
+                .collect::<Vec<_>>(),
+            vec![&[1., 0., 0.], &[0., 1., 0.], &[0., 0., 1.]]
         );
     }
 
     #[test]
     fn ambigious_decode() {
         assert_eq!(
-            CharSet::from_str("abc").unwrap().decode(&vec![1., 1., 0.].into()),
+            CharSet::from_str("abc")
+                .unwrap()
+                .decode(&TensorShared::from_vector(vec![1., 1., 0.], (3, 1, 1))),
             Err(CharSetError::DecodingVectorError(vec![1., 1., 0.]))
         );
     }
@@ -179,7 +195,7 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .decode(&vec![1., 0., 0.].into())
+                .decode(&TensorShared::from_vector(vec![1., 0., 0.], (3, 1, 1)))
                 .unwrap(),
             'a'
         );
@@ -190,7 +206,7 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .decode(&vec![0., 0., 1.].into())
+                .decode(&TensorShared::from_vector(vec![0., 0., 1.], (3, 1, 1)))
                 .unwrap(),
             'c'
         );
@@ -201,7 +217,11 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .decode_string(vec!(vec![1., 0., 0.].into(), vec![0., 1., 0.].into(), vec![0., 0., 1.].into()))
+                .decode_string(&[
+                    &TensorShared::from_vector(vec![1., 0., 0.], (3, 1, 1)),
+                    &TensorShared::from_vector(vec![0., 1., 0.], (3, 1, 1)),
+                    &TensorShared::from_vector(vec![0., 0., 1.], (3, 1, 1))
+                ])
                 .unwrap(),
             "abc"
         );
@@ -213,7 +233,11 @@ mod tests {
             CharSet::from_str("bc")
                 .unwrap()
                 .add_character('a')
-                .decode_string(vec!(vec![1., 0., 0.].into(), vec![0., 1., 0.].into(), vec![0., 0., 1.].into()))
+                .decode_string(&[
+                    &TensorShared::from_vector(vec![1., 0., 0.], (3, 1, 1)),
+                    &TensorShared::from_vector(vec![0., 1., 0.], (3, 1, 1)),
+                    &TensorShared::from_vector(vec![0., 0., 1.], (3, 1, 1))
+                ])
                 .unwrap(),
             "bca"
         );
@@ -226,7 +250,11 @@ mod tests {
                 .unwrap()
                 .add_character('a')
                 .sort()
-                .decode_string(vec!(vec![1., 0., 0.].into(), vec![0., 1., 0.].into(), vec![0., 0., 1.].into()))
+                .decode_string(&[
+                    &TensorShared::from_vector(vec![1., 0., 0.], (3, 1, 1)),
+                    &TensorShared::from_vector(vec![0., 1., 0.], (3, 1, 1)),
+                    &TensorShared::from_vector(vec![0., 0., 1.], (3, 1, 1))
+                ])
                 .unwrap(),
             "abc"
         );

@@ -40,7 +40,7 @@ impl OpNode {
     }
 
     pub fn perform_operation(&self) {
-        self._op.operate(&self._inp, &self._out)
+        self._op.evaluate(&self._inp, &self._out)
     }
 
     pub fn back_propagate(&self) {
@@ -93,7 +93,7 @@ fn back_propagate_unary_same_shape<F: Fn((FloatType, FloatType)) -> FloatType>(
 
 pub struct ExpOp {}
 impl Operator for ExpOp {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
         operate_unary_same_shape(inp, out, |inp| inp.exp());
     }
 
@@ -112,7 +112,7 @@ impl Operator for ExpOp {
 
 pub struct LogOp {}
 impl Operator for LogOp {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
         operate_unary_same_shape(inp, out, |inp| inp.ln());
     }
 
@@ -131,7 +131,7 @@ impl Operator for LogOp {
 
 pub struct NegOp {}
 impl Operator for NegOp {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
         operate_unary_same_shape(inp, out, |inp| -inp);
     }
 
@@ -150,7 +150,7 @@ impl Operator for NegOp {
 
 pub struct PowOp {}
 impl Operator for PowOp {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
         let base = &inp[0].borrow()._value;
         let exp = &inp[1].borrow()._value;
         out.borrow_mut()._value = base
@@ -193,7 +193,7 @@ impl Operator for PowOp {
 
 pub struct AddOp {}
 impl Operator for AddOp {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
         let mut out_vec = vec![0.; inp[0].borrow()._value.len()];
         inp.iter().for_each(|node| {
             let vec = &node.borrow()._value;
@@ -232,8 +232,8 @@ impl Operator for AddOp {
 
 pub struct SumOp {}
 impl Operator for SumOp {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
-        out.borrow_mut()._value = vec![inp[0].borrow()._value.iter().sum()];
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
+        out.borrow_mut()._value[0] = inp[0].borrow()._value.iter().sum();
     }
 
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
@@ -262,7 +262,7 @@ impl Operator for SumOp {
 
 pub struct MulOp {}
 impl Operator for MulOp {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
         out.borrow_mut()._value.iter_mut().for_each(|val| *val = 1.);
         inp.iter().for_each(|node| {
             let vec = &node.borrow()._value;
@@ -302,8 +302,8 @@ impl Operator for MulOp {
 
 pub struct ProdOp {}
 impl Operator for ProdOp {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
-        out.borrow_mut()._value = vec![inp[0].borrow()._value.iter().product()];
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
+        out.borrow_mut()._value[0] = inp[0].borrow()._value.iter().product();
     }
 
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
@@ -334,7 +334,7 @@ impl Operator for ProdOp {
 // Does not support tensors larger than matrices
 pub struct DotOp {}
 impl Operator for DotOp {
-    fn operate(&self, inp: &[TensorShared], out: &TensorShared) {
+    fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
         let lhs = &inp[0].borrow()._value;
         let rhs = &inp[1].borrow()._value;
 
@@ -413,7 +413,7 @@ mod tests {
         let inp2 = TensorShared::from_scalar(2.);
         let out = &inp1 + &inp2;
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_scalar().unwrap(), 3.);
         calc.back_propagation();
         assert_eq!(out.derivative_as_scalar().unwrap(), 1.);
@@ -425,29 +425,29 @@ mod tests {
     fn repeated_calculation() {
         let inp1 = TensorShared::from_vector(vec![1., 2.], (2, 1, 1));
         let inp2 = TensorShared::from_vector(vec![3., 4.], (2, 1, 1));
-        let mut expected_value = vec![3., 8.];
-        let mut expected_derivative1 = vec![3., 4.];
-        let mut expected_derivative2 = vec![1., 2.];
+        let mut expected_value = &[3., 8.];
+        let mut expected_derivative1 = &[3., 4.];
+        let mut expected_derivative2 = &[1., 2.];
 
         let out = &inp1 * &inp2;
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1., 1.]);
+        assert_eq!(out.derivative(), &[1., 1.]);
         assert_eq!(inp1.derivative(), expected_derivative1);
         assert_eq!(inp2.derivative(), expected_derivative2);
 
         inp1.borrow_mut()._value = vec![-1., 1.];
         inp2.borrow_mut()._value = vec![2., 3.];
-        expected_value = vec![-2., 3.];
-        expected_derivative1 = vec![2., 3.];
-        expected_derivative2 = vec![-1., 1.];
+        expected_value = &[-2., 3.];
+        expected_derivative1 = &[2., 3.];
+        expected_derivative2 = &[-1., 1.];
 
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1., 1.]);
+        assert_eq!(out.derivative(), &[1., 1.]);
         assert_eq!(inp1.derivative(), expected_derivative1);
         assert_eq!(inp2.derivative(), expected_derivative2);
     }
@@ -457,7 +457,7 @@ mod tests {
         let inp = TensorShared::from_scalar(1.);
         let out = &inp + &inp;
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_scalar().unwrap(), 2.);
         calc.back_propagation();
         assert_eq!(out.derivative_as_scalar().unwrap(), 1.);
@@ -468,15 +468,15 @@ mod tests {
     fn addition_of_two_vectors() {
         let inp1 = TensorShared::from_vector(vec![1., 2.], (2, 1, 1));
         let inp2 = TensorShared::from_vector(vec![3., 4.], (2, 1, 1));
-        let expected_value = vec![4., 6.];
-        let expected_derivative1 = vec![1., 1.];
-        let expected_derivative2 = vec![1., 1.];
+        let expected_value = &[4., 6.];
+        let expected_derivative1 = &[1., 1.];
+        let expected_derivative2 = &[1., 1.];
         let out = &inp1 + &inp2;
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1., 1.]);
+        assert_eq!(out.derivative(), &[1., 1.]);
         assert_eq!(inp1.derivative(), expected_derivative1);
         assert_eq!(inp2.derivative(), expected_derivative2);
     }
@@ -485,13 +485,13 @@ mod tests {
     fn sum_of_tensor_elements() {
         let inp = TensorShared::from_vector(vec![1., 2., 3., 4.], (1, 2, 2));
         let expected_value = 10.;
-        let expected_derivative = vec![1., 1., 1., 1.];
+        let expected_derivative = &[1., 1., 1., 1.];
         let out = inp.sum();
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_scalar().unwrap(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1.]);
+        assert_eq!(out.derivative_as_scalar().unwrap(), 1.);
         assert_eq!(inp.derivative(), expected_derivative);
     }
 
@@ -499,15 +499,15 @@ mod tests {
     fn product_of_two_vectors() {
         let inp1 = TensorShared::from_vector(vec![1., 2.], (2, 1, 1));
         let inp2 = TensorShared::from_vector(vec![3., 4.], (2, 1, 1));
-        let expected_value = vec![3., 8.];
-        let expected_derivative1 = vec![3., 4.];
-        let expected_derivative2 = vec![1., 2.];
+        let expected_value = &[3., 8.];
+        let expected_derivative1 = &[3., 4.];
+        let expected_derivative2 = &[1., 2.];
         let out = &inp1 * &inp2;
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1., 1.]);
+        assert_eq!(out.derivative(), &[1., 1.]);
         assert_eq!(inp1.derivative(), expected_derivative1);
         assert_eq!(inp2.derivative(), expected_derivative2);
     }
@@ -516,13 +516,13 @@ mod tests {
     fn product_of_tensor_elements() {
         let inp = TensorShared::from_vector(vec![1., 2., 3., 4.], (1, 2, 2));
         let expected_value = 24.;
-        let expected_derivative = vec![24., 12., 8., 6.];
+        let expected_derivative = &[24., 12., 8., 6.];
         let out = inp.product();
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_scalar().unwrap(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1.]);
+        assert_eq!(out.derivative_as_scalar().unwrap(), 1.);
         assert_eq!(inp.derivative(), expected_derivative);
     }
 
@@ -530,15 +530,15 @@ mod tests {
     fn power_of_two_vectors() {
         let inp1 = TensorShared::from_vector(vec![1., 2.], (2, 1, 1));
         let inp2 = TensorShared::from_vector(vec![3., 4.], (2, 1, 1));
-        let expected_value = vec![1., 16.];
-        let expected_derivative1 = vec![3., 32.];
-        let expected_derivative2 = vec![0., (2 as FloatType).ln() * 16.];
+        let expected_value = &[1., 16.];
+        let expected_derivative1 = &[3., 32.];
+        let expected_derivative2 = &[0., (2 as FloatType).ln() * 16.];
         let out = inp1.pow(&inp2);
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1., 1.]);
+        assert_eq!(out.derivative(), &[1., 1.]);
         assert_eq!(inp1.derivative(), expected_derivative1);
         assert_eq!(inp2.derivative(), expected_derivative2);
     }
@@ -551,10 +551,10 @@ mod tests {
         let inp = TensorShared::from_vector(inp, (1, 2, 2));
         let out = -(&inp);
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1., 1., 1., 1.]);
+        assert_eq!(out.derivative(), &[1., 1., 1., 1.]);
         assert_eq!(inp.derivative(), expected_derivative);
     }
 
@@ -566,10 +566,10 @@ mod tests {
         let inp = TensorShared::from_vector(inp, (1, 2, 2));
         let out = inp.log();
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1., 1., 1., 1.]);
+        assert_eq!(out.derivative(), &[1., 1., 1., 1.]);
         assert_eq!(inp.derivative(), expected_derivative);
     }
 
@@ -581,10 +581,10 @@ mod tests {
         let inp = TensorShared::from_vector(inp, (1, 2, 2));
         let out = inp.exp();
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value(), expected_value);
         calc.back_propagation();
-        assert_eq!(out.derivative(), vec![1., 1., 1., 1.]);
+        assert_eq!(out.derivative(), &[1., 1., 1., 1.]);
         assert_eq!(inp.derivative(), expected_derivative);
     }
 
@@ -593,24 +593,24 @@ mod tests {
         let a = TensorShared::from_scalar(1.0);
         let b = TensorShared::from_scalar(-1.0);
         let c = TensorShared::from_scalar(1.0);
-        let c2 = TensorShared::from_scalar(2.0);
-        let c3 = TensorShared::from_scalar(3.0);
-        let d = &a + &b - (&c * &c2);
-        let e = (-&d).pow(&c3);
-        let f = e.log();
-        let g = f.exp();
+        let d = TensorShared::from_scalar(2.0);
+        let e = TensorShared::from_scalar(3.0);
+        let f = &a + &b - (&c * &d);
+        let g = (-&f).pow(&e);
+        let h = g.log();
+        let i = h.exp();
 
-        let calc = NetworkCalculation::new(&g);
-        calc.forward();
-        assert_approx_eq!(d.value_as_scalar().unwrap(), -2.);
-        assert_approx_eq!(e.value_as_scalar().unwrap(), 8.);
-        assert_approx_eq!(f.value_as_scalar().unwrap(), 8f64.ln());
+        let calc = NetworkCalculation::new(&i);
+        calc.evaluate();
+        assert_approx_eq!(f.value_as_scalar().unwrap(), -2.);
         assert_approx_eq!(g.value_as_scalar().unwrap(), 8.);
+        assert_approx_eq!(h.value_as_scalar().unwrap(), 8f64.ln());
+        assert_approx_eq!(i.value_as_scalar().unwrap(), 8.);
         calc.back_propagation();
+        assert_approx_eq!(i.derivative_as_scalar().unwrap(), 1.);
+        assert_approx_eq!(h.derivative_as_scalar().unwrap(), 8.);
         assert_approx_eq!(g.derivative_as_scalar().unwrap(), 1.);
-        assert_approx_eq!(f.derivative_as_scalar().unwrap(), 8.);
-        assert_approx_eq!(e.derivative_as_scalar().unwrap(), 1.);
-        assert_approx_eq!(d.derivative_as_scalar().unwrap(), -12.);
+        assert_approx_eq!(f.derivative_as_scalar().unwrap(), -12.);
         assert_approx_eq!(c.derivative_as_scalar().unwrap(), 24.);
         assert_approx_eq!(b.derivative_as_scalar().unwrap(), -12.);
         assert_approx_eq!(a.derivative_as_scalar().unwrap(), -12.);
@@ -621,11 +621,11 @@ mod tests {
         let inp1 = TensorShared::from_vector(vec![1., 2.], (1, 2, 1));
         let inp2 = TensorShared::from_vector(vec![3., 4.], (2, 1, 1));
         let expected_value = 11.;
-        let expected_derivative1 = vec![3., 4.];
-        let expected_derivative2 = vec![1., 2.];
+        let expected_derivative1 = &[3., 4.];
+        let expected_derivative2 = &[1., 2.];
         let out = inp1.dot(&inp2);
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_scalar().unwrap(), expected_value);
         calc.back_propagation();
         assert_eq!(out.derivative_as_scalar().unwrap(), 1.);
@@ -637,12 +637,12 @@ mod tests {
     fn matrix_multiplication_with_vector() {
         let inp1 = TensorShared::from_vector(vec![1., 2., 3., 4.], (2, 2, 1));
         let inp2 = TensorShared::from_vector(vec![5., 6.], (2, 1, 1));
-        let expected_value = vec![17., 39.];
-        let expected_derivative1 = vec![5., 6., 5., 6.];
-        let expected_derivative2 = vec![4., 6.];
+        let expected_value = &[17., 39.];
+        let expected_derivative1 = &[5., 6., 5., 6.];
+        let expected_derivative2 = &[4., 6.];
         let out = inp1.dot(&inp2);
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_col_vector().unwrap(), expected_value);
         calc.back_propagation();
         assert_eq!(out.derivative_as_col_vector().unwrap(), &[1., 1.]);
@@ -659,7 +659,7 @@ mod tests {
         let expected_derivative2 = &[&[4., 4.], &[6., 6.]];
         let out = inp1.dot(&inp2);
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_matrix().unwrap(), expected_value);
         calc.back_propagation();
         assert_eq!(out.derivative_as_matrix().unwrap(), &[&[1., 1.], &[1., 1.]]);
@@ -676,7 +676,7 @@ mod tests {
         let expected_derivative2 = &[&[5., 5.], &[7., 7.], &[9.,9.]];
         let out = inp1.dot(&inp2);
         let calc = NetworkCalculation::new(&out);
-        calc.forward();
+        calc.evaluate();
         assert_eq!(out.value_as_matrix().unwrap(), expected_value);
         calc.back_propagation();
         assert_eq!(out.derivative_as_matrix().unwrap(), &[&[1., 1.], &[1., 1.]]);

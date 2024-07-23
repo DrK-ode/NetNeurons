@@ -1,14 +1,15 @@
-use std::iter::empty;
+use std::{fmt::Display, iter::empty};
 
-use crate::nnetwork::{GradVal, GradValVec};
+use crate::nnetwork::calculation_nodes::TensorShared;
 
 pub trait Forward {
-    type Output;
-    fn forward(&self, x: &GradValVec) -> Self::Output;
+    fn forward(&self, inp: &TensorShared) -> TensorShared;
 }
 
 pub trait Parameters {
-    fn parameters(&mut self) -> Box<dyn Iterator<Item = &mut GradVal> + '_> {
-        Box::new(empty::<&mut GradVal>())
+    fn parameters(&self) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
+        Box::new(empty::<&TensorShared>())
     }
 }
+
+pub trait Layer: Forward + Parameters + Display {}
