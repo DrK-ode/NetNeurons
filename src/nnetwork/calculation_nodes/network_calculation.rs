@@ -48,8 +48,8 @@ impl NetworkCalculation {
             fn ptr_as_usize(op: &OpNodeShared) -> usize {
                 (op.as_ref() as *const OpNode) as usize
             }
-            if !visited.contains(&ptr_as_usize(&op)) {
-                visited.insert(ptr_as_usize(&op));
+            if !visited.contains(&ptr_as_usize(op)) {
+                visited.insert(ptr_as_usize(op));
                 op._inp.iter().for_each(|prev_value| {
                     if let Some(from_op) = &prev_value.borrow()._parent_op {
                         topo_sort_recursive(from_op, visited, out);

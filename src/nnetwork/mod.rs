@@ -1,9 +1,9 @@
 mod bigram;
-mod char_set;
 mod calculation_nodes;
+mod char_set;
 mod mlp;
 
-pub use calculation_nodes::{FloatType, TensorType, TensorShape, VecOrientation, TensorShared};
 pub use bigram::Bigram;
+pub use calculation_nodes::{FloatType, TensorShape, TensorShared, TensorType, VecOrientation};
 pub use char_set::CharSet;
-pub use mlp::{LinearLayer,FunctionLayer,MLP,Forward,Parameters};
+pub use mlp::{Forward, FunctionLayer, LinearLayer, MultiLayer, Parameters};

@@ -1,6 +1,15 @@
-use std::rc::Rc;
+use std::{
+    fmt::{Display, Write},
+    rc::Rc,
+};
 
 use super::*;
+
+impl Display for OpNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self._op.symbol())
+    }
+}
 
 impl OpNode {
     fn check_size_and_shape(inp: &[TensorShared], same_shape: bool) {
@@ -26,7 +35,17 @@ impl OpNode {
         same_input_shapes: bool,
     ) -> TensorShared {
         Self::check_size_and_shape(&inp, same_input_shapes);
-        let out = TensorShared::from_shape(op.output_shape(&inp).unwrap());
+        let out_shape = op.output_shape(&inp);
+        assert!(
+            out_shape.is_some(),
+            "The following inputs are not supported by operator {}:\n{}",
+            op.symbol(),
+            inp.iter().fold(String::new(), |mut out, inp| {
+                let _ = writeln!(out, "{}", inp);
+                out
+            })
+        );
+        let out = TensorShared::from_shape(out_shape.unwrap());
         let op = Rc::new(OpNode {
             _op: op,
             _inp: inp,
@@ -153,26 +172,52 @@ impl Operator for PowOp {
     fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
         let base = &inp[0].borrow()._value;
         let exp = &inp[1].borrow()._value;
-        out.borrow_mut()._value = base
-            .iter()
-            .zip(exp)
-            .map(|(base, exp)| base.powf(*exp))
-            .collect();
+        match exp.len() {
+            1 => {
+                let exp = exp[0];
+                out.borrow_mut()._value = base.iter().map(|base| base.powf(exp)).collect();
+            }
+            _ => {
+                out.borrow_mut()._value = base
+                    .iter()
+                    .zip(exp)
+                    .map(|(base, exp)| base.powf(*exp))
+                    .collect();
+            }
+        }
     }
 
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
         let base = &inp[0];
         let exp = &inp[1];
         let size = base.borrow()._value.len();
-        for i in 0..size {
-            let exp_value = exp.borrow()._value[i];
-            let base_value = base.borrow()._value[i];
-            let out_value = out.borrow()._value[i];
-            let out_derivative = out.borrow()._derivative[i];
-            let base_derivative = exp_value * base_value.powf(exp_value - 1.) * out_derivative;
-            let exp_derivative = base_value.ln() * out_value * out_derivative;
-            base.borrow_mut()._derivative[i] += base_derivative;
-            exp.borrow_mut()._derivative[i] += exp_derivative;
+        match exp.len() {
+            1 => {
+                let exp_value = exp.value_as_scalar().unwrap();
+                for i in 0..size {
+                    let base_value = base.borrow()._value[i];
+                    let out_value = out.borrow()._value[i];
+                    let out_derivative = out.borrow()._derivative[i];
+                    let base_derivative =
+                        exp_value * base_value.powf(exp_value - 1.) * out_derivative;
+                    let exp_derivative = base_value.ln() * out_value * out_derivative;
+                    base.borrow_mut()._derivative[i] += base_derivative;
+                    exp.borrow_mut()._derivative[0] += exp_derivative;
+                }
+            }
+            _ => {
+                for i in 0..size {
+                    let exp_value = exp.borrow()._value[i];
+                    let base_value = base.borrow()._value[i];
+                    let out_value = out.borrow()._value[i];
+                    let out_derivative = out.borrow()._derivative[i];
+                    let base_derivative =
+                        exp_value * base_value.powf(exp_value - 1.) * out_derivative;
+                    let exp_derivative = base_value.ln() * out_value * out_derivative;
+                    base.borrow_mut()._derivative[i] += base_derivative;
+                    exp.borrow_mut()._derivative[i] += exp_derivative;
+                }
+            }
         }
     }
 
@@ -196,10 +241,9 @@ impl Operator for AddOp {
     fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
         let mut out_vec = vec![0.; inp[0].borrow()._value.len()];
         inp.iter().for_each(|node| {
-            let vec = &node.borrow()._value;
             out_vec
                 .iter_mut()
-                .zip(vec)
+                .zip(&node.borrow()._value)
                 .for_each(|(out, inp)| *out += *inp);
         });
         out.borrow_mut()._value = out_vec;
@@ -263,19 +307,48 @@ impl Operator for SumOp {
 pub struct MulOp {}
 impl Operator for MulOp {
     fn evaluate(&self, inp: &[TensorShared], out: &TensorShared) {
-        out.borrow_mut()._value.iter_mut().for_each(|val| *val = 1.);
-        inp.iter().for_each(|node| {
-            let vec = &node.borrow()._value;
+        if inp.len() == 2 && inp[1].len() == 1 {
+            // Special case when multipliying with a scalar
+            let inp1 = &inp[0];
+            let inp2 = inp[1].borrow()._value[0];
             out.borrow_mut()
                 ._value
                 .iter_mut()
-                .zip(vec)
-                .for_each(|(out, inp)| *out *= *inp);
+                .zip(&inp1.borrow()._value)
+                .for_each(|(out, inp1)| *out = inp1 * inp2);
+            return;
+        }
+        out.borrow_mut()._value.iter_mut().for_each(|val| *val = 1.);
+        inp.iter().for_each(|node| {
+            out.borrow_mut()
+                ._value
+                .iter_mut()
+                .zip(&node.borrow()._value)
+                .for_each(|(out, inp)| *out *= inp);
         });
     }
 
     fn back_propagate(&self, inp: &[TensorShared], out: &TensorShared) {
-        let size = inp[0].borrow()._value.len();
+        if inp.len() == 2 && inp[1].len() == 1 {
+            // Special case when multipliying with a scalar
+            let inp1 = &inp[0];
+            let inp2 = &inp[1];
+            let val2 = inp[1].borrow()._value[0];
+            inp1.borrow_mut()
+                ._derivative
+                .iter_mut()
+                .zip(&out.borrow_mut()._derivative)
+                .for_each(|(d, chain)| *d = val2 * chain);
+            inp2.borrow_mut()._derivative[0] = inp1
+                .borrow()
+                ._value
+                .iter()
+                .zip(&out.borrow()._derivative)
+                .map(|(v, chain)| v * chain)
+                .sum();
+            return;
+        }
+        let size = inp[0].len();
         for i in 0..size {
             let product = out.borrow()._value[i] * out.borrow()._derivative[i];
             for inp in inp {
@@ -356,7 +429,7 @@ impl Operator for DotOp {
         // (m x n) * (n x p) = (m x p)
         let (_m, n, _) = inp[0].shape();
         let (_, p, _) = inp[1].shape();
-        
+
         for (i, &chain_derivative) in out.borrow()._derivative.iter().enumerate() {
             let row = i / p;
             let col = i % p;
@@ -366,7 +439,9 @@ impl Operator for DotOp {
                 let rhs = &mut inp[1].borrow_mut()._derivative;
                 let lhs_row = lhs.iter().skip(row * n).take(n);
                 let rhs_col = rhs.iter_mut().skip(col).step_by(p);
-                rhs_col.zip(lhs_row).for_each(|(d, &v)| *d += v * chain_derivative);
+                rhs_col
+                    .zip(lhs_row)
+                    .for_each(|(d, &v)| *d += v * chain_derivative);
             }
 
             {
@@ -375,7 +450,9 @@ impl Operator for DotOp {
                 let rhs = &inp[1].borrow()._value;
                 let lhs_row = lhs.iter_mut().skip(row * n).take(n);
                 let rhs_col = rhs.iter().skip(col).step_by(p);
-                lhs_row.zip(rhs_col).for_each(|(d, &v)| *d += v * chain_derivative);
+                lhs_row
+                    .zip(rhs_col)
+                    .for_each(|(d, &v)| *d += v * chain_derivative);
             }
         }
     }
@@ -666,14 +743,14 @@ mod tests {
         assert_eq!(inp1.derivative_as_matrix().unwrap(), expected_derivative1);
         assert_eq!(inp2.derivative_as_matrix().unwrap(), expected_derivative2);
     }
-    
+
     #[test]
     fn matrix_multiplication_non_square_matrices() {
         let inp1 = TensorShared::from_vector(vec![1., 2., 3., 4., 5., 6.], (2, 3, 1));
         let inp2 = TensorShared::from_vector(vec![7., 8., 9., 10., 11., 12.], (3, 2, 1));
         let expected_value = &[&[58., 64.], &[139., 154.]];
         let expected_derivative1 = &[&[15., 19., 23.], &[15., 19., 23.]];
-        let expected_derivative2 = &[&[5., 5.], &[7., 7.], &[9.,9.]];
+        let expected_derivative2 = &[&[5., 5.], &[7., 7.], &[9., 9.]];
         let out = inp1.dot(&inp2);
         let calc = NetworkCalculation::new(&out);
         calc.evaluate();

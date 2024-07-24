@@ -22,7 +22,7 @@ impl DataSet {
 
     fn get_string_from_file(path: &str, lowercase: bool) -> String {
         let data =
-            fs::read_to_string(path).and_then(|s| if lowercase { Ok(s.to_lowercase()) } else { Ok(s) });
+            fs::read_to_string(path).map(|s| if lowercase { s.to_lowercase() } else { s });
         if data.is_err() {
             panic!(
                 "Received {:?}  while importing dataset from {}.",

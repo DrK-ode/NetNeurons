@@ -1,6 +1,7 @@
 use std::{
     f64::NAN,
     fmt::Display,
+    iter::Sum,
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
@@ -93,12 +94,27 @@ impl TensorShared {
     }
 }
 
-impl TensorShared{
+impl From<&[FloatType]> for TensorShared {
+    fn from(value: &[FloatType]) -> Self {
+        TensorShared::from_vector(value.to_vec(), (value.len(), 1, 1))
+    }
+}
+impl From<Vec<FloatType>> for TensorShared {
+    fn from(value: Vec<FloatType>) -> Self {
+        let size = value.len();
+        TensorShared::from_vector(value, (size, 1, 1))
+    }
+}
+
+impl TensorShared {
     pub fn decend_grad(&self, learning_rate: FloatType) {
         let mut tmp = RefCell::new(Tensor::default());
         self.swap(&tmp);
         let t = tmp.get_mut();
-        t._value.iter_mut().zip(t._derivative.iter()).for_each(|(v,d)| *v -= learning_rate * d );
+        t._value
+            .iter_mut()
+            .zip(t._derivative.iter())
+            .for_each(|(v, d)| *v -= learning_rate * d);
         self.swap(&tmp);
     }
 }
@@ -242,6 +258,23 @@ impl TensorShared {
     }
 }
 
+// Set methods
+impl Tensor {
+    pub fn set_value(&mut self, v: Vec<FloatType>) {
+        self._value = v;
+    }
+}
+impl TensorShared {
+    pub fn set_value(&mut self, v: &[FloatType]) {
+        assert_eq!(
+            self.len(),
+            v.len(),
+            "Cannot overwrite Tensor value with value of new size."
+        );
+        self.borrow_mut().set_value(v.into());
+    }
+}
+
 // Tensor properties
 impl Tensor {
     pub fn len(&self) -> usize {
@@ -251,6 +284,9 @@ impl Tensor {
 impl TensorShared {
     pub fn len(&self) -> usize {
         self.borrow().len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
     pub fn shape(&self) -> TensorShape {
         self.borrow()._shape
@@ -300,14 +336,22 @@ impl TensorShared {
             Box::new(PowOp {}),
             vec![
                 self.clone(),
-                TensorShared::from_vector(vec![-1.; self.len()], self.borrow()._shape),
+                TensorShared::from_vector(vec![-1.; self.len()], self.shape()),
             ],
             true,
         )
     }
 
     pub fn pow(&self, rhs: &TensorShared) -> TensorShared {
-        OpNode::new_op(Box::new(PowOp {}), vec![self.clone(), rhs.clone()], true)
+        if rhs.len() == 1 {
+            OpNode::new_op(Box::new(PowOp {}), vec![self.clone(), rhs.clone()], false)
+        } else {
+            OpNode::new_op(Box::new(PowOp {}), vec![self.clone(), rhs.clone()], true)
+        }
+    }
+
+    pub fn powf(&self, rhs: FloatType) -> TensorShared {
+        self.pow(&TensorShared::from_scalar(rhs))
     }
 
     pub fn sum(&self) -> TensorShared {
@@ -331,11 +375,17 @@ impl TensorShared {
     pub fn dot(&self, rhs: &TensorShared) -> TensorShared {
         OpNode::new_op(Box::new(DotOp {}), vec![self.clone(), rhs.clone()], false)
     }
+
+    pub fn normalized(&self) -> TensorShared {
+        self / self.sum()
+    }
 }
 
 impl Neg for TensorShared {
     type Output = TensorShared;
-    fn neg(self) -> Self::Output { -(&self) }
+    fn neg(self) -> Self::Output {
+        -(&self)
+    }
 }
 impl Neg for &TensorShared {
     type Output = TensorShared;
@@ -352,19 +402,27 @@ impl Add for &TensorShared {
 }
 impl Add for TensorShared {
     type Output = TensorShared;
-    fn add(self, rhs: Self) -> Self::Output { &self + &rhs }
+    fn add(self, rhs: Self) -> Self::Output {
+        &self + &rhs
+    }
 }
 impl Add<&TensorShared> for TensorShared {
     type Output = TensorShared;
-    fn add(self, rhs: &Self) -> Self::Output { &self + rhs }
+    fn add(self, rhs: &Self) -> Self::Output {
+        &self + rhs
+    }
 }
 impl Add<TensorShared> for &TensorShared {
     type Output = TensorShared;
-    fn add(self, rhs: TensorShared) -> Self::Output { self + &rhs }
+    fn add(self, rhs: TensorShared) -> Self::Output {
+        self + &rhs
+    }
 }
 impl Sub for TensorShared {
     type Output = TensorShared;
-    fn sub(self, rhs: Self) -> Self::Output { &self - &rhs }
+    fn sub(self, rhs: Self) -> Self::Output {
+        &self - &rhs
+    }
 }
 impl Sub for &TensorShared {
     type Output = TensorShared;
@@ -374,47 +432,73 @@ impl Sub for &TensorShared {
 }
 impl Sub<&TensorShared> for TensorShared {
     type Output = TensorShared;
-    fn sub(self, rhs: &Self) -> Self::Output { &self + rhs }
+    fn sub(self, rhs: &Self) -> Self::Output {
+        &self - rhs
+    }
 }
 impl Sub<TensorShared> for &TensorShared {
     type Output = TensorShared;
-    fn sub(self, rhs: TensorShared) -> Self::Output { self + &rhs }
+    fn sub(self, rhs: TensorShared) -> Self::Output {
+        self - &rhs
+    }
 }
 impl Mul for TensorShared {
     type Output = TensorShared;
-    fn mul(self, rhs: Self) -> Self::Output { &self * &rhs }
+    fn mul(self, rhs: Self) -> Self::Output {
+        &self * &rhs
+    }
 }
 impl Mul for &TensorShared {
     type Output = TensorShared;
     fn mul(self, rhs: Self) -> Self::Output {
-        OpNode::new_op(Box::new(MulOp {}), vec![self.clone(), rhs.clone()], true)
+        if rhs.len() == 1 {
+            OpNode::new_op(Box::new(MulOp {}), vec![self.clone(), rhs.clone()], false)
+        } else {
+            OpNode::new_op(Box::new(MulOp {}), vec![self.clone(), rhs.clone()], true)
+        }
     }
 }
 impl Mul<&TensorShared> for TensorShared {
     type Output = TensorShared;
-    fn mul(self, rhs: &Self) -> Self::Output { &self + rhs }
+    fn mul(self, rhs: &Self) -> Self::Output {
+        &self * rhs
+    }
 }
 impl Mul<TensorShared> for &TensorShared {
     type Output = TensorShared;
-    fn mul(self, rhs: TensorShared) -> Self::Output { self + &rhs }
+    fn mul(self, rhs: TensorShared) -> Self::Output {
+        self * &rhs
+    }
 }
 impl Div for TensorShared {
     type Output = TensorShared;
-    fn div(self, rhs: Self) -> Self::Output { &self / &rhs }
+    fn div(self, rhs: Self) -> Self::Output {
+        &self / &rhs
+    }
 }
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl Div for &TensorShared {
     type Output = TensorShared;
     fn div(self, rhs: Self) -> Self::Output {
-        OpNode::new_op(Box::new(MulOp {}), vec![self.clone(), rhs.inv()], true)
+        self * rhs.inv()
     }
 }
 impl Div<&TensorShared> for TensorShared {
     type Output = TensorShared;
-    fn div(self, rhs: &Self) -> Self::Output { &self + rhs }
+    fn div(self, rhs: &Self) -> Self::Output {
+        &self / rhs
+    }
 }
 impl Div<TensorShared> for &TensorShared {
     type Output = TensorShared;
-    fn div(self, rhs: TensorShared) -> Self::Output { self + &rhs }
+    fn div(self, rhs: TensorShared) -> Self::Output {
+        self / &rhs
+    }
+}
+impl Sum for TensorShared {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        TensorShared::add_many(&iter.collect::<Vec<_>>())
+    }
 }
 
 impl Display for TensorConversionError {

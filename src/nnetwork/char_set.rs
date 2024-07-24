@@ -4,10 +4,10 @@ use super::calculation_nodes::{FloatType, TensorShared, TensorType, VecOrientati
 
 #[derive(Debug, PartialEq)]
 pub enum CharSetError {
-    EncodingError(char),
-    DecodingVectorError(Vec<FloatType>),
-    DecodingIndexError(usize),
-    CreationError,
+    Encoding(char),
+    DecodingVector(Vec<FloatType>),
+    DecodingIndex(usize),
+    Creation,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -29,7 +29,7 @@ impl CharSet {
         self
     }
 
-    pub fn from_str_vec<T>(vec: &Vec<T>) -> Self
+    pub fn from_str_vec<T>(vec: &[T]) -> Self
     where
         T: ToString,
     {
@@ -59,15 +59,15 @@ impl CharSet {
             .filter_map(|(n, &elem)| if elem > 0. { Some(n) } else { None })
             .collect();
         if index.len() != 1 {
-            return Err(CharSetError::DecodingVectorError(
-                vector.value().iter().copied().collect(),
+            return Err(CharSetError::DecodingVector(
+                vector.value().to_vec(),
             ));
         }
         let index = index[0];
         Ok(self
             ._characters
             .get(index)
-            .ok_or_else(|| CharSetError::DecodingIndexError(index))?)
+            .ok_or(CharSetError::DecodingIndex(index))?)
         .copied()
     }
 
@@ -80,7 +80,7 @@ impl CharSet {
             ._characters
             .iter()
             .position(|k| c == *k)
-            .ok_or_else(|| CharSetError::EncodingError(c))?;
+            .ok_or(CharSetError::Encoding(c))?;
         let size = self._characters.len();
         let mut vector = vec![0.; size];
         vector[n] = 1.;
@@ -186,7 +186,7 @@ mod tests {
             CharSet::from_str("abc")
                 .unwrap()
                 .decode(&TensorShared::from_vector(vec![1., 1., 0.], (3, 1, 1))),
-            Err(CharSetError::DecodingVectorError(vec![1., 1., 0.]))
+            Err(CharSetError::DecodingVector(vec![1., 1., 0.]))
         );
     }
 

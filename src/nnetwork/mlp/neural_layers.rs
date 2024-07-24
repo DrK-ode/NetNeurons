@@ -1,6 +1,6 @@
 use std::{fmt::Display, iter};
 
-use crate::nnetwork::calculation_nodes::{TensorShape, TensorShared};
+use crate::nnetwork::calculation_nodes::TensorShared;
 
 use super::neural_traits::{Forward, Layer, Parameters};
 
@@ -22,7 +22,7 @@ impl LinearLayer {
     }
     pub fn from_tensors(w: TensorShared, b: Option<TensorShared>) -> LinearLayer {
         assert!(
-            w.len() > 0 && (b.is_none() || b.as_ref().unwrap().len() > 0),
+            !w.is_empty() && (b.is_none() || !b.as_ref().unwrap().is_empty()),
             "Cannot create layer from empty tensor."
         );
         if let Some(b) = &b {
@@ -49,9 +49,9 @@ impl Display for LinearLayer {
 impl Forward for LinearLayer {
     fn forward(&self, prev: &TensorShared) -> TensorShared {
         if self._b.is_some() {
-            &self._w * prev + self._b.as_ref().unwrap()
+            self._w.dot(prev) + self._b.as_ref().unwrap()
         } else {
-            &self._w * prev
+            self._w.dot(prev)
         }
     }
 }
@@ -84,6 +84,14 @@ impl FunctionLayer {
             _func: f,
             _label: label.into(),
         }
+    }
+    
+    pub fn sigmoid(inp: &TensorShared) -> TensorShared{
+        (TensorShared::from_vector(vec![1.;inp.len()], inp.shape()) + (-inp).exp()).pow( &TensorShared::from_scalar(-1.) )
+    }
+    
+    pub fn softmax(inp: &TensorShared) -> TensorShared{
+        inp.exp().normalized()
     }
 }
 
