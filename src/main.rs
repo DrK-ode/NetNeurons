@@ -17,6 +17,7 @@ fn main() {
         .unwrap();
 
     bigram_model.learn(cycles, learning_rate, data_block_size, regularization, verbose);
+    bigram_model.export_parameters("shakespeare.param").unwrap();
 
     let text_with_training = bigram_model
         .predict(prediction_seed, prediction_length)

@@ -2,7 +2,7 @@ use std::{fmt::Display, iter};
 
 use crate::nnetwork::calculation_nodes::TensorShared;
 
-use super::neural_traits::{Forward, Layer, Parameters};
+use super::layer_traits::{Forward, Layer, Parameters};
 
 pub struct LinearLayer {
     _w: TensorShared,

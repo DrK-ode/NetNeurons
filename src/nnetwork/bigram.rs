@@ -124,8 +124,8 @@ impl Bigram {
         let mut file = File::create(filename)?;
         self._mlp.parameters().for_each(|param| {
             param.borrow().value().iter().for_each(|v| {
-                bytes_written += v.to_ne_bytes().len();
-                file.write_all(v.to_ne_bytes().as_slice()).unwrap();
+                bytes_written += v.to_le_bytes().len();
+                file.write_all(v.to_le_bytes().as_slice()).unwrap();
             });
         });
         Ok(bytes_written)
@@ -138,9 +138,9 @@ impl Bigram {
         self._mlp.parameters().for_each(|param| {
             let mut vec = vec![NAN; param.len()];
             vec.iter_mut().for_each(|v| {
-                bytes_read += v.to_ne_bytes().len();
+                bytes_read += v.to_le_bytes().len();
                 file.read_exact(buffer).unwrap();
-                *v = FloatType::from_ne_bytes(*buffer);
+                *v = FloatType::from_le_bytes(*buffer);
             });
             param.borrow_mut().set_value(vec);
         });

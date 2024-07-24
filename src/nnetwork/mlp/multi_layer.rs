@@ -7,7 +7,7 @@ use crate::nnetwork::{
     TensorShape,
 };
 
-use super::neural_traits::{Layer, Parameters};
+use super::layer_traits::{Layer, Parameters};
 
 pub struct MultiLayer {
     _layers: Vec<Box<dyn Layer>>,
