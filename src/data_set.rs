@@ -2,8 +2,8 @@ use rand::Rng;
 use std::fs;
 
 pub struct DataSet {
-    the_data: String,
-    training_len: usize,
+    _the_data: String,
+    _training_len: usize,
 }
 
 impl DataSet {
@@ -11,8 +11,8 @@ impl DataSet {
         let the_data = Self::get_string_from_file(path, lowercase);
         let training_len = Self::calc_training_len(the_data.len(), training_ratio);
         DataSet {
-            the_data,
-            training_len,
+            _the_data: the_data,
+            _training_len: training_len,
         }
     }
 
@@ -34,32 +34,40 @@ impl DataSet {
     }
 
     pub fn set_training_ratio(&mut self, ratio: f32) {
-        self.training_len = Self::calc_training_len(self.the_data.len(), ratio);
+        self._training_len = Self::calc_training_len(self._the_data.len(), ratio);
     }
 
-    pub fn get_training_data(&self) -> &str {
-        &self.the_data[..self.training_len]
+    pub fn training_data(&self) -> &str {
+        &self._the_data[..self._training_len]
     }
 
-    pub fn get_validation_data(&self) -> &str {
-        &self.the_data[self.training_len..]
+    pub fn training_len(&self) -> usize {
+        self._training_len
     }
 
-    pub fn get_training_block(&self, block_size: usize) -> &str {
-        if block_size + 1 >= self.training_len {
-            return self.get_training_data();
+    pub fn validation_data(&self) -> &str {
+        &self._the_data[self._training_len..]
+    }
+
+    pub fn validation_len(&self) -> usize {
+        self._the_data.len() - self._training_len
+    }
+
+    pub fn training_block(&self, block_size: usize) -> &str {
+        if block_size + 1 >= self._training_len {
+            return self.training_data();
         }
-        let end = rand::thread_rng().gen_range(block_size..=self.training_len);
-        &self.the_data[end - block_size..end]
+        let end = rand::thread_rng().gen_range(block_size..=self._training_len);
+        &self._the_data[end - block_size..end]
     }
 
-    pub fn get_validation_block(&self, block_size: usize) -> &str {
-        let validation_len = self.the_data.len() - self.training_len;
+    pub fn validation_block(&self, block_size: usize) -> &str {
+        let validation_len = self._the_data.len() - self._training_len;
         if block_size <= validation_len {
-            return self.get_validation_data();
+            return self.validation_data();
         }
-        let end = self.training_len + rand::thread_rng().gen_range(block_size..validation_len);
-        &self.the_data[end - block_size..end]
+        let end = self._training_len + rand::thread_rng().gen_range(block_size..validation_len);
+        &self._the_data[end - block_size..end]
     }
 }
 
@@ -84,14 +92,14 @@ mod tests {
     #[test]
     fn reading_all_shakespeare() {
         let ds = import_shakespeare();
-        assert!(ds.the_data.starts_with("First Citizen:"));
-        assert!(ds.the_data.ends_with("Whiles thou art waking.\n"));
+        assert!(ds._the_data.starts_with("First Citizen:"));
+        assert!(ds._the_data.ends_with("Whiles thou art waking.\n"));
     }
 
     #[test]
     fn finding_all_characters_in_shakespeare() {
         let ds = import_shakespeare();
-        let charset = CharSet::from_str(ds.get_training_data()).unwrap();
-        assert_eq!(charset.size(), 65);
+        let charset = CharSet::from_str(ds.training_data()).unwrap();
+        assert_eq!(charset.size(), 64);
     }
 }
