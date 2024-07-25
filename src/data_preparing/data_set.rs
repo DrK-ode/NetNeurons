@@ -75,7 +75,7 @@ impl DataSet {
 mod tests {
     use std::str::FromStr;
 
-    use crate::nnetwork::CharSet;
+    use crate::data_preparing::char_set::CharSet;
 
     use super::*;
 

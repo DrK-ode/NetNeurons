@@ -1,6 +1,8 @@
-use std::{fmt::Display, str::FromStr};
+use std::{
+    fmt::Display, str::FromStr
+};
 
-use super::calculation_nodes::{FloatType, TensorShared, TensorType, VecOrientation};
+use crate::nnetwork::{FloatType, TensorShared, TensorType, VecOrientation};
 
 #[derive(Debug, PartialEq)]
 pub enum CharSetError {
@@ -29,20 +31,6 @@ impl CharSet {
         self
     }
 
-    pub fn from_str_vec<T>(vec: &[T]) -> Self
-    where
-        T: ToString,
-    {
-        let mut charset = CharSet::default();
-        vec.iter().for_each(|s| {
-            s.to_string().chars().for_each(|c| {
-                charset.add_character(c);
-            })
-        });
-        charset._characters.sort();
-        charset
-    }
-
     pub fn size(&self) -> usize {
         self._characters.len()
     }
@@ -59,9 +47,7 @@ impl CharSet {
             .filter_map(|(n, &elem)| if elem > 0. { Some(n) } else { None })
             .collect();
         if index.len() != 1 {
-            return Err(CharSetError::DecodingVector(
-                vector.value().to_vec(),
-            ));
+            return Err(CharSetError::DecodingVector(vector.value().to_vec()));
         }
         let index = index[0];
         Ok(self
@@ -109,21 +95,15 @@ impl Display for CharSet {
 
 impl FromStr for CharSet {
     type Err = CharSetError;
-
     fn from_str(data: &str) -> Result<CharSet, CharSetError> {
-        let mut charset = CharSet::default();
-        data.chars().for_each(|c| {
-            charset.add_character(c);
-        });
-        charset._characters.sort_unstable();
-        Ok(charset)
+        Ok(CharSet::from_iter(data.chars()))
     }
 }
 
 impl FromIterator<char> for CharSet {
-    fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = char>>(to_iter: T) -> Self {
         let mut charset = CharSet::default();
-        iter.into_iter().for_each(|c| {
+        to_iter.into_iter().for_each(|c| {
             charset.add_character(c);
         });
         charset._characters.sort();
