@@ -31,7 +31,11 @@ impl Bigram {
         let mut mlp = MultiLayer::from_empty();
 
         for i in 1..=number_of_layers {
-            mlp.add_layer(Box::new(LinearLayer::from_rand(n_chars, n_chars, biased_layers)));
+            mlp.add_layer(Box::new(LinearLayer::from_rand(
+                n_chars,
+                n_chars,
+                biased_layers,
+            )));
             if i != number_of_layers {
                 mlp.add_layer(Box::new(FunctionLayer::new(
                     &FunctionLayer::sigmoid,
@@ -121,7 +125,26 @@ impl Bigram {
 
     pub fn export_parameters(&self, filename: &str) -> std::io::Result<usize> {
         let mut bytes_written = 0;
-        let mut file = File::create(filename)?;
+        let mut fn_string = filename.to_string();
+        let mut counter: usize = 0;
+        let mut file = loop {
+            let file = File::create_new(&fn_string);
+            match file {
+                Ok(file) => {
+                    break file;
+                }
+                Err(err) => {
+                    match err.kind() {
+                        std::io::ErrorKind::AlreadyExists => (),
+                        _ => {
+                            println!("Export parameters failed: {}", err)
+                        }
+                    }
+                }
+            }
+            fn_string = filename.to_string() + "." + &counter.to_string();
+            counter += 1;
+        };
         self._mlp.parameters().for_each(|param| {
             param.borrow().value().iter().for_each(|v| {
                 bytes_written += v.to_le_bytes().len();
@@ -132,19 +155,26 @@ impl Bigram {
     }
 
     pub fn import_parameters(&mut self, filename: &str) -> std::io::Result<usize> {
-        let mut file = File::open(filename)?;
-        let mut bytes_read = 0;
-        let buffer = &mut [0u8;std::mem::size_of::<FloatType>()];
-        self._mlp.parameters().for_each(|param| {
-            let mut vec = vec![NAN; param.len()];
-            vec.iter_mut().for_each(|v| {
-                bytes_read += v.to_le_bytes().len();
-                file.read_exact(buffer).unwrap();
-                *v = FloatType::from_le_bytes(*buffer);
-            });
-            param.borrow_mut().set_value(vec);
-        });
-        Ok(bytes_read)
+        match File::open(filename) {
+            Ok(mut file) => {
+                let mut bytes_read = 0;
+                let buffer = &mut [0u8; std::mem::size_of::<FloatType>()];
+                self._mlp.parameters().for_each(|param| {
+                    let mut vec = vec![NAN; param.len()];
+                    vec.iter_mut().for_each(|v| {
+                        bytes_read += v.to_le_bytes().len();
+                        file.read_exact(buffer).unwrap();
+                        *v = FloatType::from_le_bytes(*buffer);
+                    });
+                    param.borrow_mut().set_value(vec);
+                });
+                Ok(bytes_read)
+            }
+            Err(err) => {
+                println!("Import parameters failed: {}", err);
+                Err(err)
+            }
+        }
     }
 }
 
@@ -158,6 +188,15 @@ mod test {
         let mut bigram2 = Bigram::new(DataSet::new("./datasets/test.txt", 1.0, true), 1, true);
         bigram1.export_parameters("test/test.param").unwrap();
         bigram2.import_parameters("test/test.param").unwrap();
-        bigram1._mlp.parameters().zip(bigram2._mlp.parameters()).for_each(|(p1,p2)| p1.value().iter().zip(p2.value().iter()).for_each(|(&p1,&p2)| assert_eq!(p1,p2)));
+        bigram1
+            ._mlp
+            .parameters()
+            .zip(bigram2._mlp.parameters())
+            .for_each(|(p1, p2)| {
+                p1.value()
+                    .iter()
+                    .zip(p2.value().iter())
+                    .for_each(|(&p1, &p2)| assert_eq!(p1, p2))
+            });
     }
 }

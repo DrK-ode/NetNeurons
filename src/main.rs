@@ -4,8 +4,8 @@ use retext::nnetwork::{Bigram, FloatType};
 fn main() {
     let data_set = DataSet::new("./datasets/tiny_shakespeare.txt", 1.0, true);
     let mut bigram_model = Bigram::new(data_set, 1, true);
-    let cycles = 1000000;
-    let learning_rate = 0.05 as FloatType;
+    let cycles = 1000;
+    let learning_rate = 0.1 as FloatType;
     let data_block_size = 128;
     let regularization: Option<FloatType> = None;
     let verbose = true;
@@ -16,6 +16,7 @@ fn main() {
         .predict(prediction_seed, prediction_length)
         .unwrap();
 
+    bigram_model.import_parameters("shakespeare.param").unwrap();
     bigram_model.learn(cycles, learning_rate, data_block_size, regularization, verbose);
     bigram_model.export_parameters("shakespeare.param").unwrap();
 
