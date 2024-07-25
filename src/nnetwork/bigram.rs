@@ -93,9 +93,15 @@ impl Bigram {
         for n in 0..cycles {
             let training_data = self._data.training_block(data_block_size);
             let correlations = self.extract_correlations(training_data);
-            let loss = self._mlp.train(&correlations, learning_rate, verbose);
+            let timer = Instant::now();
+            let loss = self._mlp.train(&correlations, learning_rate);
             if verbose {
-                println!("Cycle {n} loss: {:e}", loss.value_as_scalar().unwrap())
+                let width = (cycles as f64).log10() as usize;
+                println!(
+                    "Cycle #{n: >width$}: [ loss: {:.3e}, duration: {} µs ]",
+                    loss.value_as_scalar().unwrap(),
+                    timer.elapsed().as_micros()
+                );
             }
         }
         println!(
@@ -133,14 +139,12 @@ impl Bigram {
                 Ok(file) => {
                     break file;
                 }
-                Err(err) => {
-                    match err.kind() {
-                        std::io::ErrorKind::AlreadyExists => (),
-                        _ => {
-                            println!("Export parameters failed: {}", err)
-                        }
+                Err(err) => match err.kind() {
+                    std::io::ErrorKind::AlreadyExists => (),
+                    _ => {
+                        println!("Export parameters failed: {}", err)
                     }
-                }
+                },
             }
             fn_string = filename.to_string() + "." + &counter.to_string();
             counter += 1;

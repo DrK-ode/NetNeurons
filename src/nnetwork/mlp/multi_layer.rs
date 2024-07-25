@@ -154,28 +154,12 @@ impl MultiLayer {
         &mut self,
         inp: &[(TensorShared, TensorShared)],
         learning_rate: FloatType,
-        verbose: bool,
     ) -> TensorShared {
         self.load_correlations(inp);
         let calc = &self._train_calc.as_ref().unwrap().0;
-
-        let timer = Instant::now();
         let loss = calc.evaluate();
-        if verbose {
-            println!(
-                "Performing calculation took {} µs",
-                timer.elapsed().as_micros()
-            )
-        }
-
-        let timer = Instant::now();
         calc.back_propagation();
-        if verbose {
-            println!("Back propagation took {} µs", timer.elapsed().as_micros())
-        }
-
         self.decend_grad(learning_rate);
-
         loss
     }
 
