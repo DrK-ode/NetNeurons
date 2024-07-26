@@ -19,7 +19,7 @@ pub struct Bigram {
 impl Bigram {
     pub fn new(data: DataSet, number_of_layers: usize, biased_layers: bool) -> Self {
         let chars = CharSet::from_str(data.training_data()).unwrap();
-        let n_chars = chars.size();
+        let n_chars = chars.len();
         let mut mlp = MultiLayer::from_empty();
 
         for i in 1..=number_of_layers {
@@ -52,12 +52,14 @@ impl Bigram {
             .chars()
             .zip(data_block.chars().skip(1))
             .map(|(prev, next)| {
+                let prev = prev.to_string();
+                let next = next.to_string();
                 (
                     self._charset
-                        .encode(prev)
+                        .encode(&prev)
                         .expect("Cannot encode character: {prev}"),
                     self._charset
-                        .encode(next)
+                        .encode(&next)
                         .expect("Cannot encode character: {next}"),
                 )
             })
@@ -73,7 +75,7 @@ impl Bigram {
         verbose: bool,
     ) {
         let timer = Instant::now();
-        let inp_shape = (self._charset.size(), 1, 1);
+        let inp_shape = (self._charset.len(), 1, 1);
         let out_shape = inp_shape;
         self._mlp.define_training(
             min(data_block_size, self._data.training_len()) - 1,
@@ -112,7 +114,7 @@ impl Bigram {
         if s.is_empty() {
             panic!("Aborting, cannot extrapolate from empty string.")
         }
-        let mut last_char = self._charset.encode(s.chars().last().unwrap())?;
+        let mut last_char = self._charset.encode(&s[(s.len()-2) ..])?;
         self._mlp.define_forward(last_char.shape());
         for _ in 0..number_of_characters {
             last_char = MultiLayer::collapse(&self._mlp.forward(&last_char));
@@ -121,11 +123,11 @@ impl Bigram {
         Ok(s)
     }
 
-    pub fn export_parameters(&self, filename: &str) -> std::io::Result<usize> {
+    pub fn export_parameters(&self, filename: &str) -> std::io::Result<String> {
         self._mlp.export_parameters(filename)
     }
 
-    pub fn import_parameters(&mut self, filename: &str) -> std::io::Result<usize> {
+    pub fn import_parameters(&mut self, filename: &str) -> std::io::Result<()> {
         self._mlp.import_parameters(filename)
     }
 }
@@ -138,8 +140,8 @@ mod test {
     fn read_from_file() {
         let bigram1 = Bigram::new(DataSet::new("./datasets/test.txt", 1.0, true), 1, true);
         let mut bigram2 = Bigram::new(DataSet::new("./datasets/test.txt", 1.0, true), 1, true);
-        bigram1.export_parameters("test/test.param").unwrap();
-        bigram2.import_parameters("test/test.param").unwrap();
+        let filename = bigram1.export_parameters("test/test.param").unwrap();
+        bigram2.import_parameters(&filename).unwrap();
         bigram1
             ._mlp
             .parameters()

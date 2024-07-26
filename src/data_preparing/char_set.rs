@@ -1,6 +1,4 @@
-use std::{
-    fmt::Display, str::FromStr
-};
+use std::{fmt::Display, str::FromStr};
 
 use crate::nnetwork::{FloatType, TensorShared, TensorType, VecOrientation};
 
@@ -31,8 +29,12 @@ impl CharSet {
         self
     }
 
-    pub fn size(&self) -> usize {
+    pub fn len(&self) -> usize {
         self._characters.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn decode(&self, vector: &TensorShared) -> Result<char, CharSetError> {
@@ -61,20 +63,27 @@ impl CharSet {
         v.iter().map(|v| self.decode(v)).collect()
     }
 
-    pub fn encode(&self, c: char) -> Result<TensorShared, CharSetError> {
-        let n = self
-            ._characters
-            .iter()
-            .position(|k| c == *k)
-            .ok_or(CharSetError::Encoding(c))?;
-        let size = self._characters.len();
-        let mut vector = vec![0.; size];
-        vector[n] = 1.;
-        Ok(TensorShared::from_vector(vector, (size, 1, 1)))
-    }
-
-    pub fn encode_string(&self, s: &str) -> Result<Vec<TensorShared>, CharSetError> {
-        s.chars().map(|c| self.encode(c)).collect()
+    /*pub fn encode(&self, c: char) -> Result<TensorShared, CharSetError> {
+    let n = self
+        ._characters
+        .iter()
+        .position(|k| c == *k)
+        .ok_or(CharSetError::Encoding(c))?;
+    let size = self._characters.len();
+    Ok(TensorShared::one_hot(n, (size, 1, 1)))
+    }*/
+    pub fn encode(&self, s: &str) -> Result<TensorShared, CharSetError> {
+        let n_rows = self.len();
+        let n_cols = s.len();
+        let mut out = TensorShared::from_vector(vec![0.; n_rows * n_cols], (n_rows, n_cols, 1));
+        for (col, ch) in s.chars().enumerate() {
+            if let Some(row) = self._characters.iter().position(|&k| ch == k) {
+                out.set_index(row, col, 0, 1.);
+            } else {
+                return Err(CharSetError::Encoding(ch));
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -117,7 +126,7 @@ mod tests {
 
     #[test]
     fn construct_from_str() {
-        assert_eq!(CharSet::from_str("abcdefgh").unwrap().size(), 8);
+        assert_eq!(CharSet::from_str("abcdefgh").unwrap().len(), 8);
     }
 
     #[test]
@@ -125,7 +134,7 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .encode('a')
+                .encode("a")
                 .unwrap()
                 .value_as_col_vector()
                 .unwrap(),
@@ -138,7 +147,7 @@ mod tests {
         assert_eq!(
             CharSet::from_str("abc")
                 .unwrap()
-                .encode('c')
+                .encode("c")
                 .unwrap()
                 .value_as_col_vector()
                 .unwrap(),
@@ -151,12 +160,10 @@ mod tests {
         assert_eq!(
             CharSet::from_str("cab")
                 .unwrap()
-                .encode_string("abc")
+                .encode("bca")
                 .unwrap()
-                .iter()
-                .map(|v| v.value_as_col_vector().unwrap())
-                .collect::<Vec<_>>(),
-            vec![&[1., 0., 0.], &[0., 1., 0.], &[0., 0., 1.]]
+                .value(),
+            &[0., 0., 1. ,1., 0., 0.,0., 1., 0.]
         );
     }
 

@@ -273,6 +273,12 @@ impl TensorShared {
         );
         self.borrow_mut().set_value(v.into());
     }
+    
+    pub fn set_index(&mut self, i:usize,j:usize,k:usize, v: FloatType){
+        let (_n_i, n_j, n_k) = self.shape();
+        let index = i * n_j*n_k + j*n_k + k;
+        self.borrow_mut()._value[index] = v;
+    }
 }
 
 // Tensor properties

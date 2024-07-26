@@ -21,8 +21,7 @@ impl DataSet {
     }
 
     fn get_string_from_file(path: &str, lowercase: bool) -> String {
-        let data =
-            fs::read_to_string(path).map(|s| if lowercase { s.to_lowercase() } else { s });
+        let data = fs::read_to_string(path).map(|s| if lowercase { s.to_lowercase() } else { s });
         if data.is_err() {
             panic!(
                 "Received {:?}  while importing dataset from {}.",
@@ -100,6 +99,6 @@ mod tests {
     fn finding_all_characters_in_shakespeare() {
         let ds = import_shakespeare();
         let charset = CharSet::from_str(ds.training_data()).unwrap();
-        assert_eq!(charset.size(), 64);
+        assert_eq!(charset.len(), 64);
     }
 }

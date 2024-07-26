@@ -15,14 +15,17 @@ pub trait Parameters {
         Box::new(empty())
     }
 
-    fn export_parameters(&self, filename: &str) -> std::io::Result<usize> {
-        let mut bytes_written = 0;
+    // Adds a numerical suffix if the wanted filename is taken. The filename is returned upon successful export.
+    fn export_parameters(&self, filename: &str) -> std::io::Result<String> {
         let mut fn_string = filename.to_string();
         let mut counter: usize = 0;
         let mut file = loop {
             let file = File::create_new(&fn_string);
             match file {
                 Ok(file) => {
+                    if counter > 0{
+                        println!("Exporting parameters to; {fn_string}");
+                    }
                     break file;
                 }
                 Err(err) => match err.kind() {
@@ -36,29 +39,26 @@ pub trait Parameters {
             counter += 1;
         };
         self.parameters().for_each(|param| {
-            param.borrow().value().iter().for_each(|v| {
-                bytes_written += v.to_le_bytes().len();
-                file.write_all(v.to_le_bytes().as_slice()).unwrap();
-            });
+            param.borrow().value().iter().for_each(|v| 
+                file.write_all(v.to_le_bytes().as_slice()).unwrap()
+            );
         });
-        Ok(bytes_written)
+        Ok(fn_string)
     }
 
-    fn import_parameters(&self, filename: &str) -> std::io::Result<usize> {
+    fn import_parameters(&self, filename: &str) -> std::io::Result<()> {
         match File::open(filename) {
             Ok(mut file) => {
-                let mut bytes_read = 0;
                 let buffer = &mut [0u8; std::mem::size_of::<FloatType>()];
                 self.parameters().for_each(|param| {
                     let mut vec = vec![NAN; param.len()];
                     vec.iter_mut().for_each(|v| {
-                        bytes_read += v.to_le_bytes().len();
                         file.read_exact(buffer).unwrap();
                         *v = FloatType::from_le_bytes(*buffer);
                     });
                     param.borrow_mut().set_value(vec);
                 });
-                Ok(bytes_read)
+                Ok(())
             }
             Err(err) => {
                 println!("Import parameters failed: {}", err);

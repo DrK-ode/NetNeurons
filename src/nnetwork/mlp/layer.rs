@@ -67,30 +67,34 @@ impl Parameters for LinearLayer {
     }
 }
 
-impl Layer for LinearLayer {
-}
+impl Layer for LinearLayer {}
 
+#[derive(Clone)]
 pub struct FunctionLayer {
     _func: &'static dyn Fn(&TensorShared) -> TensorShared,
     _label: String,
 }
 
 impl FunctionLayer {
-    pub fn new(
-        f: &'static dyn Fn(&TensorShared) -> TensorShared,
-        label: &str,
-    ) -> FunctionLayer {
+    pub fn new(f: &'static dyn Fn(&TensorShared) -> TensorShared, label: &str) -> FunctionLayer {
         FunctionLayer {
             _func: f,
             _label: label.into(),
         }
     }
-    
-    pub fn sigmoid(inp: &TensorShared) -> TensorShared{
-        (TensorShared::from_vector(vec![1.;inp.len()], inp.shape()) + (-inp).exp()).pow( &TensorShared::from_scalar(-1.) )
+
+    pub fn sigmoid(inp: &TensorShared) -> TensorShared {
+        (TensorShared::from_vector(vec![1.; inp.len()], inp.shape()) + (-inp).exp())
+            .pow(&TensorShared::from_scalar(-1.))
     }
-    
-    pub fn softmax(inp: &TensorShared) -> TensorShared{
+
+    pub fn tanh(inp: &TensorShared) -> TensorShared {
+        let one = TensorShared::from_vector(vec![1.; inp.len()], inp.shape());
+        let exp2 = (inp * TensorShared::from_scalar(2.)).exp();
+        (&one - &exp2) / (&one + &exp2)
+    }
+
+    pub fn softmax(inp: &TensorShared) -> TensorShared {
         inp.exp().normalized()
     }
 }

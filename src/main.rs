@@ -7,7 +7,7 @@ fn main() {
     let cycles = 1000;
     let learning_rate = 0.1 as FloatType;
     let training_batch_size = 128;
-    let data_block_size = 3;
+    let _data_block_size = 3;
     let number_of_layers = 1;
     let regularization: Option<FloatType> = None;
     let verbose = true;
