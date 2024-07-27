@@ -1,5 +1,4 @@
 use std::{
-    f64::NAN,
     fmt::Display,
     iter::Sum,
     ops::{Add, Div, Mul, Neg, Sub},
@@ -41,7 +40,7 @@ impl TensorShared {
         Self::from_tensor(Tensor {
             _shape: (1, 1, 1),
             _value: vec![value],
-            _derivative: vec![NAN],
+            _derivative: vec![f64::NAN],
             ..Default::default()
         })
     }
@@ -54,7 +53,7 @@ impl TensorShared {
         Self::from_tensor(Tensor {
             _shape: shape,
             _value: value,
-            _derivative: vec![NAN; size],
+            _derivative: vec![f64::NAN; size],
             ..Default::default()
         })
     }
@@ -63,8 +62,8 @@ impl TensorShared {
         let size = shape.0 * shape.1 * shape.2;
         Self::from_tensor(Tensor {
             _shape: shape,
-            _value: vec![NAN; size],
-            _derivative: vec![NAN; size],
+            _value: vec![f64::NAN; size],
+            _derivative: vec![f64::NAN; size],
             ..Default::default()
         })
     }
@@ -76,21 +75,18 @@ impl TensorShared {
             _value: (0..size)
                 .map(|_| thread_rng().sample(StandardNormal))
                 .collect(),
-            _derivative: vec![NAN; size],
+            _derivative: vec![f64::NAN; size],
             ..Default::default()
         })
     }
 
-    pub fn reshape(&self, shape: TensorShape) -> Self {
+    pub fn reshape(&mut self, shape: TensorShape) {
         assert_eq!(
             self._tensor.borrow()._value.len(),
             shape.0 * shape.1 * shape.2,
             "Size must not change when reshaping Tensor"
         );
-        Self::from_tensor(Tensor {
-            _shape: shape,
-            ..Default::default()
-        })
+        self.borrow_mut()._shape = shape;
     }
 }
 

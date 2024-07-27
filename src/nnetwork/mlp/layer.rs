@@ -1,6 +1,6 @@
 use std::{fmt::Display, iter};
 
-use crate::nnetwork::calculation_nodes::TensorShared;
+use crate::nnetwork::{calculation_nodes::TensorShared, TensorShape};
 
 use super::layer_traits::{Forward, Layer, Parameters};
 
@@ -67,7 +67,11 @@ impl Parameters for LinearLayer {
     }
 }
 
-impl Layer for LinearLayer {}
+impl Layer for LinearLayer {
+    fn shape(&self) -> Option<TensorShape> {
+        Some(self._w.shape())
+    }
+}
 
 #[derive(Clone)]
 pub struct FunctionLayer {

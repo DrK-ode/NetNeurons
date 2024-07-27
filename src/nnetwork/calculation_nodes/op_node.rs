@@ -12,6 +12,7 @@ impl Display for OpNode {
 }
 
 impl OpNode {
+    // Dimension compliency is only checked when defining the calculation, not in the evaluation step. This allows for reshaping in the middle of computations.
     fn check_size_and_shape(inp: &[TensorShared], same_shape: bool) {
         if !inp.is_empty() {
             let shape = inp[0].borrow()._shape;
@@ -101,7 +102,6 @@ fn back_propagate_unary_same_shape<F: Fn((FloatType, FloatType)) -> FloatType>(
     out: &TensorShared,
     dfdx: F,
 ) {
-    // Can I utilize std::men::take or RefCell::replace in order to zip and iterate?
     let inp = &inp[0];
     let size = inp.borrow()._value.len();
     for i in 0..size {

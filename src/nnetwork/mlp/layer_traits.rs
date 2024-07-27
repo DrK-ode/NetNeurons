@@ -1,10 +1,9 @@
-use std::f64::NAN;
 use std::fmt::Display;
 use std::io::{Read, Write};
 use std::{fs::File, iter::empty};
 
 use crate::nnetwork::calculation_nodes::TensorShared;
-use crate::nnetwork::FloatType;
+use crate::nnetwork::{FloatType, TensorShape};
 
 pub trait Forward {
     fn forward(&self, inp: &TensorShared) -> TensorShared;
@@ -23,7 +22,7 @@ pub trait Parameters {
             let file = File::create_new(&fn_string);
             match file {
                 Ok(file) => {
-                    if counter > 0{
+                    if counter > 0 {
                         println!("Exporting parameters to; {fn_string}");
                     }
                     break file;
@@ -39,9 +38,11 @@ pub trait Parameters {
             counter += 1;
         };
         self.parameters().for_each(|param| {
-            param.borrow().value().iter().for_each(|v| 
-                file.write_all(v.to_le_bytes().as_slice()).unwrap()
-            );
+            param
+                .borrow()
+                .value()
+                .iter()
+                .for_each(|v| file.write_all(v.to_le_bytes().as_slice()).unwrap());
         });
         Ok(fn_string)
     }
@@ -50,14 +51,18 @@ pub trait Parameters {
         match File::open(filename) {
             Ok(mut file) => {
                 let buffer = &mut [0u8; std::mem::size_of::<FloatType>()];
-                self.parameters().for_each(|param| {
-                    let mut vec = vec![NAN; param.len()];
-                    vec.iter_mut().for_each(|v| {
-                        file.read_exact(buffer).unwrap();
-                        *v = FloatType::from_le_bytes(*buffer);
-                    });
+                for param in self.parameters() {
+                    let mut vec = vec![f64::NAN; param.len()];
+                    for v in vec.iter_mut() {
+                        match file.read_exact(buffer) {
+                            Ok(_) => *v = FloatType::from_le_bytes(*buffer),
+                            Err(err) => {
+                                return Err(err);
+                            }
+                        }
+                    }
                     param.borrow_mut().set_value(vec);
-                });
+                }
                 Ok(())
             }
             Err(err) => {
@@ -68,4 +73,8 @@ pub trait Parameters {
     }
 }
 
-pub trait Layer: Forward + Parameters + Display{}
+pub trait Layer: Forward + Parameters + Display {
+    fn shape(&self) -> Option<TensorShape> {
+        None
+    }
+}
