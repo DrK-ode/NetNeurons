@@ -2,68 +2,108 @@ use std::time::Instant;
 
 use crate::{
     data_preparing::data_set::{DataSet, DataSetError},
-    nnetwork::Parameters,
+    nnetwork::{Parameters, ReshapeLayer},
 };
 
-use super::{FloatType, FunctionLayer, Layer, LinearLayer, MultiLayer, TensorShared};
+use super::{
+    FloatType, Forward, FunctionLayer, Layer, LinearLayer, Predictor, TensorShared, Trainer,
+};
 
 pub struct ReText {
     _dataset: DataSet,
-    _ml: MultiLayer,
+    _trainer: Trainer,
+    _predictor: Predictor,
     _block_size: usize,
 }
 
 impl ReText {
-    pub fn new(
-        data: DataSet,
-        batch_size: usize,
-        data_block_size: usize,
+    pub fn create_layers(
+        n_chars: usize,
+        block_size: usize,
         embed_dim: Option<usize>,
         n_hidden_layers: usize,
         layer_dim: usize,
-        regularization: Option<FloatType>,
-    ) -> ReText {
-        let n_chars = data.number_of_chars();
+    ) -> Vec<Box<dyn Layer>> {
         let mut layers: Vec<Box<dyn Layer>> = Vec::new();
-        let non_linearity = FunctionLayer::new(&FunctionLayer::tanh, "Tanh");
+        let non_linearity = FunctionLayer::new(&FunctionLayer::tanh, "Tanh", "Non-linearity layer");
         const BIASED_LAYERS: bool = true;
 
+        //Embed
+        if let Some(embed_dim) = embed_dim {
+            let embed_layer = LinearLayer::from_rand(embed_dim, n_chars, false, "Embedding layer");
+            let reshape_layer =
+                ReshapeLayer::new((block_size * embed_dim, 1, 1), "Reshaping layer");
+            let resize_layer = LinearLayer::from_rand(
+                layer_dim,
+                block_size * embed_dim,
+                BIASED_LAYERS,
+                "Resizing layer (in)",
+            );
+            layers.push(Box::new(embed_layer));
+            layers.push(Box::new(reshape_layer));
+            layers.push(Box::new(resize_layer));
+        } else {
+            let resize_layer =
+                LinearLayer::from_rand(layer_dim, n_chars, BIASED_LAYERS, "Resizing layer (in)");
+            layers.push(Box::new(resize_layer));
+        }
+        let regularize_layer = non_linearity.clone();
+        layers.push(Box::new(regularize_layer));
+
         // Hidden layers
-        for _ in 0..n_hidden_layers {
+        for n in 0..n_hidden_layers {
             layers.push(Box::new(LinearLayer::from_rand(
                 layer_dim,
                 layer_dim,
                 BIASED_LAYERS,
+                &format!("Hidden layer {n}"),
             )));
             layers.push(Box::new(non_linearity.clone()));
         }
 
         // Deembed
         layers.push(Box::new(LinearLayer::from_rand(
-            layer_dim,
             n_chars,
+            layer_dim,
             BIASED_LAYERS,
+            "Resizing layer (out)",
         )));
 
         layers.push(Box::new(FunctionLayer::new(
             &FunctionLayer::softmax,
             "SoftMax",
+            "Probability producing layer",
         )));
 
-        let ml = MultiLayer::new_trainable(
-            (n_chars, data_block_size, 1),
-            embed_dim,
-            (n_chars, 1, 1),
-            batch_size,
-            layers,
-            regularization,
-            &MultiLayer::neg_log_likelihood,
-        );
+        layers
+    }
 
+    pub fn new(
+        data: DataSet,
+        batch_size: usize,
+        block_size: usize,
+        embed_dim: Option<usize>,
+        n_hidden_layers: usize,
+        layer_dim: usize,
+        regularization: Option<FloatType>,
+    ) -> ReText {
+        let n_chars = data.number_of_chars();
+        let training_layers =
+            Self::create_layers(n_chars, block_size, embed_dim, n_hidden_layers, layer_dim);
+        let predicting_layers =
+            Self::create_layers(n_chars, block_size, embed_dim, n_hidden_layers, layer_dim);
         ReText {
             _dataset: data,
-            _ml: ml,
-            _block_size: data_block_size,
+            _trainer: Trainer::new(
+                (n_chars, block_size, 1),
+                (n_chars, 1, 1),
+                batch_size,
+                training_layers,
+                regularization,
+                &Trainer::neg_log_likelihood,
+            ),
+            _predictor: Predictor::new((n_chars, 1, 1), predicting_layers),
+            _block_size: block_size,
         }
     }
 
@@ -79,7 +119,7 @@ impl ReText {
             let training_data = self._dataset.training_block(data_size);
             let correlations = self.extract_correlations(training_data);
             let timer = Instant::now();
-            let loss = self._ml.train(&correlations, learning_rate);
+            let loss = self._trainer.train(&correlations, learning_rate);
             if verbose {
                 let width = (cycles as f64).log10() as usize;
                 println!(
@@ -91,7 +131,7 @@ impl ReText {
         }
         println!(
             "Trained network with {} parameters for {cycles} cycles in {} ms.",
-            self._ml.parameters().map(|p| p.len()).sum::<usize>(),
+            self._trainer.parameters().map(|p| p.len()).sum::<usize>(),
             timer.elapsed().as_millis()
         );
     }
@@ -130,17 +170,17 @@ impl ReText {
         let range = (s.len() - (self._block_size + 1))..;
         let mut last = self._dataset.encode(&s[range])?;
         for _ in 0..number_of_characters {
-            last = MultiLayer::collapse(&self._ml.forward(&last));
+            last = Predictor::collapse(&self._predictor.forward(&last));
             s.push(self._dataset.decode(&last)?);
         }
         Ok(s)
     }
 
     pub fn export_parameters(&self, filename: &str) -> std::io::Result<String> {
-        self._ml.export_parameters(filename)
+        self._trainer.export_parameters(filename)
     }
 
     pub fn import_parameters(&mut self, filename: &str) -> std::io::Result<()> {
-        self._ml.import_parameters(filename)
+        self._trainer.import_parameters(filename)
     }
 }

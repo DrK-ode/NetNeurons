@@ -42,7 +42,7 @@ impl OpNode {
             "The following inputs are not supported by operator {}:\n{}",
             op.symbol(),
             inp.iter().fold(String::new(), |mut out, inp| {
-                let _ = writeln!(out, "{}", inp);
+                let _ = writeln!(out, "{}\n", inp);
                 out
             })
         );

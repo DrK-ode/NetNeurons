@@ -533,11 +533,12 @@ impl Display for TensorShared {
                 // Column Vector
                 write!(
                     f,
-                    "Vector ({}): [value: {:?} ∇: {:?}]",
+                    "Vector ({}: {}): [value: {:?} ∇: {:?}]",
                     match orient {
-                        VecOrientation::Column => "col",
-                        VecOrientation::Row => "row",
+                        VecOrientation::Column => "cols",
+                        VecOrientation::Row => "rows",
                     },
+                    self.len(),
                     self.borrow()._value,
                     self.borrow()._derivative
                 )?

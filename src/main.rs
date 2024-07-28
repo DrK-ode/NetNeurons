@@ -6,11 +6,11 @@ fn main() {
     let data = DataSet::new("./datasets/tiny_shakespeare.txt", 1.0, true);
     let cycles = 1000;
     let learning_rate = 1 as FloatType;
-    let training_batch_size = 1000;
-    let data_block_size = 1;
+    let training_batch_size = 10;
+    let data_block_size = 3;
     let n_hidden_layers = 0;
     let embed_dim = Some(2);
-    let layer_size = 100;
+    let layer_size = 4;
     let regularization: Option<FloatType> = None;
     let verbose = true;
     let prediction_seed = "Once upon a time ";

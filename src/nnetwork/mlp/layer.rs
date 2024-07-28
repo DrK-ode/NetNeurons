@@ -7,20 +7,22 @@ use super::layer_traits::{Forward, Layer, Parameters};
 pub struct LinearLayer {
     _w: TensorShared,
     _b: Option<TensorShared>,
+    _label: String,
 }
 
 impl LinearLayer {
-    pub fn from_rand(n_in: usize, n_out: usize, biased: bool) -> LinearLayer {
+    pub fn from_rand(n_rows: usize, n_cols: usize, biased: bool, label: &str) -> LinearLayer {
         LinearLayer {
-            _w: TensorShared::from_random((n_out, n_in, 1)),
+            _w: TensorShared::from_random((n_rows, n_cols, 1)),
             _b: if biased {
-                Some(TensorShared::from_random((n_out, 1, 1)))
+                Some(TensorShared::from_random((n_rows, 1, 1)))
             } else {
                 None
             },
+            _label: label.to_string(),
         }
     }
-    pub fn from_tensors(w: TensorShared, b: Option<TensorShared>) -> LinearLayer {
+    pub fn from_tensors(w: TensorShared, b: Option<TensorShared>, label: &str) -> LinearLayer {
         assert!(
             !w.is_empty() && (b.is_none() || !b.as_ref().unwrap().is_empty()),
             "Cannot create layer from empty tensor."
@@ -32,13 +34,17 @@ impl LinearLayer {
                 "Bias tensor must have equal number of rows as weight tensor."
             );
         }
-        LinearLayer { _w: w, _b: b }
+        LinearLayer {
+            _w: w,
+            _b: b,
+            _label: label.to_string(),
+        }
     }
 }
 
 impl Display for LinearLayer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LinearLayer: [weights: {}", self._w)?;
+        write!(f, "LinearLayer ({}): [weights: {}", self._label, self._w)?;
         if self._b.is_some() {
             write!(f, ", biases: {}", self._w)?;
         }
@@ -71,18 +77,55 @@ impl Layer for LinearLayer {
     fn shape(&self) -> Option<TensorShape> {
         Some(self._w.shape())
     }
+
+    fn layer_name(&self) -> &str {
+        &self._label
+    }
+}
+
+pub struct ReshapeLayer {
+    _shape: TensorShape,
+    _label: String,
+}
+impl ReshapeLayer {
+    pub fn new(shape: TensorShape, label: &str) -> Self {
+        ReshapeLayer {
+            _shape: shape,
+            _label: label.to_string(),
+        }
+    }
+}
+impl Forward for ReshapeLayer {
+    fn forward(&self, inp: &TensorShared) -> TensorShared {
+        let mut out = inp.clone();
+        out.reshape(self._shape);
+        out
+    }
+}
+impl Display for ReshapeLayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "ReshapeLayer ({}): [{:?}]", self._label, self._shape)
+    }
+}
+impl Parameters for ReshapeLayer {}
+impl Layer for ReshapeLayer {
+    fn layer_name(&self) -> &str {
+        &self._label
+    }
 }
 
 #[derive(Clone)]
 pub struct FunctionLayer {
     _func: &'static dyn Fn(&TensorShared) -> TensorShared,
+    _formula: String,
     _label: String,
 }
 
 impl FunctionLayer {
-    pub fn new(f: &'static dyn Fn(&TensorShared) -> TensorShared, label: &str) -> FunctionLayer {
+    pub fn new(f: &'static dyn Fn(&TensorShared) -> TensorShared, formula: &str, label: &str) -> FunctionLayer {
         FunctionLayer {
             _func: f,
+            _formula: formula.into(),
             _label: label.into(),
         }
     }
@@ -105,7 +148,7 @@ impl FunctionLayer {
 
 impl Display for FunctionLayer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "FunctionLayer: [{}]", self._label)
+        writeln!(f, "FunctionLayer ({}): [{}]", self._formula, self._label)
     }
 }
 
@@ -115,7 +158,11 @@ impl Forward for FunctionLayer {
     }
 }
 impl Parameters for FunctionLayer {}
-impl Layer for FunctionLayer {}
+impl Layer for FunctionLayer {
+    fn layer_name(&self) -> &str {
+        &self._label
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -127,6 +174,7 @@ mod tests {
         let layer = LinearLayer::from_tensors(
             TensorShared::from_vector(vec![1., 2., 3., 4.], (2, 2, 1)),
             None,
+            "TestLayer",
         );
         let inp = TensorShared::from_vector(vec![5., 6.], (2, 1, 1));
         let expected_value = &[17., 39.];
@@ -153,6 +201,7 @@ mod tests {
         let layer = LinearLayer::from_tensors(
             TensorShared::from_vector(vec![1., 2., 3., 4.], (2, 2, 1)),
             Some(TensorShared::from_vector(vec![7., 8.], (2, 1, 1))),
+            "TestLayer",
         );
         let inp = TensorShared::from_vector(vec![5., 6.], (2, 1, 1));
         let expected_value = &[17. + 7., 39. + 8.];

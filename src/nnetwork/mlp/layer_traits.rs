@@ -77,4 +77,6 @@ pub trait Layer: Forward + Parameters + Display {
     fn shape(&self) -> Option<TensorShape> {
         None
     }
+    
+    fn layer_name(&self) -> &str;
 }
