@@ -1,4 +1,3 @@
-use rand::Rng;
 use std::fs;
 
 use crate::nnetwork::{FloatType, TensorShared, TensorType, VecOrientation};
@@ -14,14 +13,25 @@ pub enum DataSetError {
 pub struct DataSet {
     _data: String,
     _chars: Vec<char>,
-    _training_len: usize,
+    _training_data: Vec<String>,
+    _validation_data: Vec<String>,
 }
 
 impl DataSet {
     pub fn new(path: &str, training_ratio: f32, lowercase: bool) -> Self {
         let data = Self::get_string_from_file(path, lowercase);
-        let training_len = Self::calc_training_len(data.len(), training_ratio);
-        
+        let mut training_data = Vec::new();
+        let mut validation_data = Vec::new();
+        let mut n_newlines = (data.lines().count() as f32 * training_ratio) as usize - 1;
+        for line in data.lines() {
+            if n_newlines == 0{
+                validation_data.push(line.to_string());
+                continue;
+            }
+            training_data.push(line.to_string());
+            n_newlines -= 1;
+        }
+
         let mut chars = Vec::new();
         data.chars().for_each(|c| {
             if !chars.contains(&c) {
@@ -29,16 +39,19 @@ impl DataSet {
             }
         });
         chars.sort();
-        
+
         DataSet {
             _data: data,
-            _training_len: training_len,
             _chars: chars,
+            _training_data: training_data,
+            _validation_data: validation_data,
         }
     }
 
-    fn calc_training_len(data_len: usize, ratio: f32) -> usize {
-        (data_len as f32 * ratio) as usize
+    pub fn add_character(&mut self, c: char) {
+        if !self._chars.contains(&c) {
+            self._chars.push(c);
+        }
     }
 
     fn get_string_from_file(path: &str, lowercase: bool) -> String {
@@ -53,41 +66,12 @@ impl DataSet {
         data.unwrap()
     }
 
-    pub fn set_training_ratio(&mut self, ratio: f32) {
-        self._training_len = Self::calc_training_len(self._data.len(), ratio);
+    pub fn training_data(&self) -> &[String] {
+        &self._training_data
     }
 
-    pub fn training_data(&self) -> &str {
-        &self._data[..self._training_len]
-    }
-
-    pub fn training_len(&self) -> usize {
-        self._training_len
-    }
-
-    pub fn validation_data(&self) -> &str {
-        &self._data[self._training_len..]
-    }
-
-    pub fn validation_len(&self) -> usize {
-        self._data.len() - self._training_len
-    }
-
-    pub fn training_block(&self, block_size: usize) -> &str {
-        if block_size + 1 >= self._training_len {
-            return self.training_data();
-        }
-        let end = rand::thread_rng().gen_range(block_size..=self._training_len);
-        &self._data[end - block_size..end]
-    }
-
-    pub fn validation_block(&self, block_size: usize) -> &str {
-        let validation_len = self._data.len() - self._training_len;
-        if block_size <= validation_len {
-            return self.validation_data();
-        }
-        let end = self._training_len + rand::thread_rng().gen_range(block_size..validation_len);
-        &self._data[end - block_size..end]
+    pub fn validation_data(&self) -> &[String] {
+        &self._validation_data
     }
 
     pub fn number_of_chars(&self) -> usize {
@@ -136,8 +120,6 @@ impl DataSet {
 
 #[cfg(test)]
 mod tests {
-
-
     use super::*;
 
     fn import_shakespeare() -> DataSet {

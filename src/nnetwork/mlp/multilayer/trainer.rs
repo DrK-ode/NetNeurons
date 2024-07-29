@@ -69,7 +69,7 @@ impl Trainer {
             // Mean of the sum of the squares of all parameters
             let param = Self::parameters_from_layers(layers);
             let reg_loss =
-                param.map(|p| p.powf(2.)).sum::<TensorShared>() * regularization / n_param;
+                param.map(|p| p.powf(2.).sum()).sum::<TensorShared>() * regularization / n_param;
             loss = loss + reg_loss;
         };
         println!(

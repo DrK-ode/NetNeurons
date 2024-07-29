@@ -90,18 +90,6 @@ impl TensorShared {
     }
 }
 
-impl From<&[FloatType]> for TensorShared {
-    fn from(value: &[FloatType]) -> Self {
-        TensorShared::from_vector(value.to_vec(), (value.len(), 1, 1))
-    }
-}
-impl From<Vec<FloatType>> for TensorShared {
-    fn from(value: Vec<FloatType>) -> Self {
-        let size = value.len();
-        TensorShared::from_vector(value, (size, 1, 1))
-    }
-}
-
 impl TensorShared {
     pub fn decend_grad(&self, learning_rate: FloatType) {
         let mut tmp = RefCell::new(Tensor::default());

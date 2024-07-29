@@ -1,3 +1,4 @@
+use rand::Rng;
 use std::time::Instant;
 
 use crate::{
@@ -6,7 +7,8 @@ use crate::{
 };
 
 use super::{
-    mlp::ParameterBundle, FloatType, FunctionLayer, Layer, LinearLayer, Predictor, TensorShared, Trainer
+    mlp::ParameterBundle, FloatType, FunctionLayer, Layer, LinearLayer, Predictor, TensorShared,
+    Trainer,
 };
 
 pub struct ReText {
@@ -116,8 +118,8 @@ impl ReText {
     ) {
         let timer = Instant::now();
         for n in 0..cycles {
-            let training_data = self._dataset.training_block(data_size);
-            let correlations = self.extract_correlations(training_data);
+            let training_data = self._dataset.training_data();
+            let correlations = self.extract_correlations(training_data, data_size);
             let timer = Instant::now();
             let loss = self._trainer.train(&correlations, learning_rate);
             if verbose {
@@ -137,22 +139,38 @@ impl ReText {
     }
 
     // Returns a list of all correlations in the data encoded as a tuple of Matrix(m*n) and ColumnVector(n).
-    fn extract_correlations(&self, data: &str) -> Vec<(TensorShared, TensorShared)> {
-        data.char_indices()
-            .zip(data.char_indices().skip(self._block_size))
-            .map(|((i, _prev), (j, next))| {
-                let prev = &data[i..j];
-                let next = next.to_string();
-                (
-                    self._dataset
-                        .encode(prev)
-                        .expect("Cannot encode character: {prev}"),
-                    self._dataset
-                        .encode(&next)
-                        .expect("Cannot encode character: {next}"),
-                )
-            })
-            .collect()
+    fn extract_correlations(&self, data: &[String], n: usize) -> Vec<(TensorShared, TensorShared)> {
+        let n_lines = data.len();
+        let mut correlations = Vec::new();
+        let pad = "^".to_string().repeat(self._block_size);
+        let mut line_idx = rand::thread_rng().gen_range(0..n_lines);
+        while correlations.len() < n {
+            let line = &data[line_idx];
+            let s = "".to_string() + &pad + line + &pad;
+            s.char_indices()
+                .zip(s.char_indices().skip(self._block_size))
+                .map(|((i, _prev), (j, next))| {
+                    let prev = &s[i..j];
+                    let next = next.to_string();
+                    (
+                        self._dataset
+                            .encode(prev)
+                            .expect("Cannot encode character: {prev}"),
+                        self._dataset
+                            .encode(&next)
+                            .expect("Cannot encode character: {next}"),
+                    )
+                })
+                .for_each(|corr| {
+                    correlations.push(corr);
+                });
+            line_idx += 1;
+            if line_idx >= data.len() {
+                line_idx = 0;
+            }
+        }
+        correlations.truncate(n);
+        correlations
     }
 
     pub fn predict(
@@ -160,20 +178,26 @@ impl ReText {
         seed_string: &str,
         number_of_characters: usize,
     ) -> Result<String, DataSetError> {
-        let mut s = seed_string.to_owned();
+        let pad = "^".to_string().repeat(self._block_size);
+        let mut s = pad + seed_string;
         if s.len() < self._block_size {
             panic!(
                 "Aborting, cannot extrapolate from string shorter than {}.",
                 self._block_size
             );
         }
-        let range = (s.len() - (self._block_size + 1))..;
+        let range = (s.len() - self._block_size)..;
+        // The following line break upon non ascii input
         let mut last = self._dataset.encode(&s[range])?;
         for _ in 0..number_of_characters {
             last = Predictor::collapse(&self._predictor.forward(&last));
-            s.push(self._dataset.decode(&last)?);
+            let c = self._dataset.decode(&last)?;
+            if c == '^' {
+                break;
+            }
+            s.push(c);
         }
-        Ok(s)
+        Ok(s[self._block_size..].to_string())
     }
 
     pub fn get_parameter_bundle(&self) -> ParameterBundle {
@@ -183,7 +207,7 @@ impl ReText {
     pub fn load_trainer_parameter_bundle(&mut self, bundle: &ParameterBundle) {
         self._trainer.load_parameter_bundle(bundle)
     }
-    
+
     pub fn load_predictor_parameter_bundle(&mut self, bundle: &ParameterBundle) {
         self._predictor.load_parameter_bundle(bundle)
     }
