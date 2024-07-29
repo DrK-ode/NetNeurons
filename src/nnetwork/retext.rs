@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    FloatType, Forward, FunctionLayer, Layer, LinearLayer, Predictor, TensorShared, Trainer,
+    mlp::ParameterBundle, FloatType, FunctionLayer, Layer, LinearLayer, Predictor, TensorShared, Trainer
 };
 
 pub struct ReText {
@@ -102,7 +102,7 @@ impl ReText {
                 regularization,
                 &Trainer::neg_log_likelihood,
             ),
-            _predictor: Predictor::new((n_chars, 1, 1), predicting_layers),
+            _predictor: Predictor::new((n_chars, block_size, 1), predicting_layers),
             _block_size: block_size,
         }
     }
@@ -131,7 +131,7 @@ impl ReText {
         }
         println!(
             "Trained network with {} parameters for {cycles} cycles in {} ms.",
-            self._trainer.parameters().map(|p| p.len()).sum::<usize>(),
+            self._trainer.param_iter().map(|p| p.len()).sum::<usize>(),
             timer.elapsed().as_millis()
         );
     }
@@ -176,11 +176,15 @@ impl ReText {
         Ok(s)
     }
 
-    pub fn export_parameters(&self, filename: &str) -> std::io::Result<String> {
-        self._trainer.export_parameters(filename)
+    pub fn get_parameter_bundle(&self) -> ParameterBundle {
+        self._trainer.get_parameter_bundle()
     }
 
-    pub fn import_parameters(&mut self, filename: &str) -> std::io::Result<()> {
-        self._trainer.import_parameters(filename)
+    pub fn load_trainer_parameter_bundle(&mut self, bundle: &ParameterBundle) {
+        self._trainer.load_parameter_bundle(bundle)
+    }
+    
+    pub fn load_predictor_parameter_bundle(&mut self, bundle: &ParameterBundle) {
+        self._predictor.load_parameter_bundle(bundle)
     }
 }

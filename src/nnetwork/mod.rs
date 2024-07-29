@@ -4,4 +4,4 @@ mod retext;
 
 pub use retext::ReText;
 pub use calculation_nodes::{FloatType, TensorShape, TensorShared, TensorType, VecOrientation};
-pub use mlp::{Forward, FunctionLayer, Layer, LinearLayer, Predictor, Trainer, Parameters, ReshapeLayer};
+pub use mlp::{FunctionLayer, Layer, LinearLayer, Predictor, Trainer, Parameters, ParameterBundle, ReshapeLayer};

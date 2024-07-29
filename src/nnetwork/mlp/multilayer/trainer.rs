@@ -1,8 +1,7 @@
 use std::{fmt::Display, time::Instant};
 
 use crate::nnetwork::{
-    calculation_nodes::{FloatType, NetworkCalculation, TensorShared},
-    Layer, Parameters, TensorShape,
+    calculation_nodes::{FloatType, NetworkCalculation, TensorShared}, mlp::ParameterBundle, Layer, Parameters, TensorShape
 };
 
 pub struct Trainer {
@@ -113,7 +112,15 @@ impl Trainer {
     }
 
     fn decend_grad(&self, learning_rate: FloatType) {
-        self.parameters().for_each(|p| p.decend_grad(learning_rate));
+        self.param_iter().for_each(|p| p.decend_grad(learning_rate));
+    }
+    
+    pub fn load_parameter_bundle(&self, bundle: &ParameterBundle){
+        bundle.load_parameters(&self._layers)
+    }
+    
+    pub fn get_parameter_bundle(&self) -> ParameterBundle {
+        ParameterBundle::new(&self._layers)
     }
 }
 
@@ -131,11 +138,11 @@ impl Trainer {
     fn parameters_from_layers(
         layers: &[Box<dyn Layer>],
     ) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
-        Box::new(layers.iter().flat_map(|l| l.parameters()))
+        Box::new(layers.iter().flat_map(|l| l.param_iter()))
     }
 }
 impl Parameters for Trainer {
-    fn parameters(&self) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
+    fn param_iter(&self) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
         Self::parameters_from_layers(&self._layers)
     }
 }

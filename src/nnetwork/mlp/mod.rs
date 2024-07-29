@@ -1,8 +1,8 @@
 mod multilayer;
 mod layer;
-mod layer_traits;
+mod parameters;
 
 pub use multilayer::Predictor;
 pub use multilayer::Trainer;
-pub use layer::{FunctionLayer, LinearLayer, ReshapeLayer};
-pub use layer_traits::{Forward, Parameters, Layer};
+pub use layer::{FunctionLayer, LinearLayer, ReshapeLayer, Layer};
+pub use parameters::{Parameters,ParameterBundle};

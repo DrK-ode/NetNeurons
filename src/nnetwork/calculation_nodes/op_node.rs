@@ -264,13 +264,18 @@ impl Operator for AddOp {
     }
 
     fn output_shape(&self, input: &[TensorShared]) -> Option<TensorShape> {
-        if input.len() >= 2 {
-            let input_shape = input[0].borrow()._shape;
-            if input_shape.0 * input_shape.1 * input_shape.2 != 0 {
-                return Some(input_shape.to_owned());
+        match input.len() {
+            0 => Some((0, 0, 0)),
+            _ => {
+                let input_shape = input[0].shape();
+                if input_shape.0 * input_shape.1 * input_shape.2 != 0 {
+                    Some(input_shape)
+                }
+                else{
+                    None
+                }
             }
         }
-        None
     }
 }
 

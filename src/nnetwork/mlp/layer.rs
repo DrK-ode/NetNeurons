@@ -2,7 +2,17 @@ use std::{fmt::Display, iter};
 
 use crate::nnetwork::{calculation_nodes::TensorShared, TensorShape};
 
-use super::layer_traits::{Forward, Layer, Parameters};
+use super::parameters::Parameters;
+
+pub trait Layer: Parameters + Display {
+    fn shape(&self) -> Option<TensorShape> {
+        None
+    }
+
+    fn forward(&self, inp: &TensorShared) -> TensorShared;
+
+    fn layer_name(&self) -> &str;
+}
 
 pub struct LinearLayer {
     _w: TensorShared,
@@ -52,18 +62,8 @@ impl Display for LinearLayer {
     }
 }
 
-impl Forward for LinearLayer {
-    fn forward(&self, prev: &TensorShared) -> TensorShared {
-        if self._b.is_some() {
-            self._w.dot(prev) + self._b.as_ref().unwrap()
-        } else {
-            self._w.dot(prev)
-        }
-    }
-}
-
 impl Parameters for LinearLayer {
-    fn parameters(&self) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
+    fn param_iter(&self) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
         let parameters = iter::once(&self._w);
         if self._b.is_some() {
             Box::new(parameters.chain(iter::once(self._b.as_ref().unwrap())))
@@ -74,8 +74,12 @@ impl Parameters for LinearLayer {
 }
 
 impl Layer for LinearLayer {
-    fn shape(&self) -> Option<TensorShape> {
-        Some(self._w.shape())
+    fn forward(&self, prev: &TensorShared) -> TensorShared {
+        if self._b.is_some() {
+            self._w.dot(prev) + self._b.as_ref().unwrap()
+        } else {
+            self._w.dot(prev)
+        }
     }
 
     fn layer_name(&self) -> &str {
@@ -87,6 +91,7 @@ pub struct ReshapeLayer {
     _shape: TensorShape,
     _label: String,
 }
+
 impl ReshapeLayer {
     pub fn new(shape: TensorShape, label: &str) -> Self {
         ReshapeLayer {
@@ -95,20 +100,22 @@ impl ReshapeLayer {
         }
     }
 }
-impl Forward for ReshapeLayer {
-    fn forward(&self, inp: &TensorShared) -> TensorShared {
-        let mut out = inp.clone();
-        out.reshape(self._shape);
-        out
-    }
-}
+
 impl Display for ReshapeLayer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "ReshapeLayer ({}): [{:?}]", self._label, self._shape)
     }
 }
+
 impl Parameters for ReshapeLayer {}
+
 impl Layer for ReshapeLayer {
+    fn forward(&self, inp: &TensorShared) -> TensorShared {
+        let mut out = inp.clone();
+        out.reshape(self._shape);
+        out
+    }
+    
     fn layer_name(&self) -> &str {
         &self._label
     }
@@ -122,7 +129,11 @@ pub struct FunctionLayer {
 }
 
 impl FunctionLayer {
-    pub fn new(f: &'static dyn Fn(&TensorShared) -> TensorShared, formula: &str, label: &str) -> FunctionLayer {
+    pub fn new(
+        f: &'static dyn Fn(&TensorShared) -> TensorShared,
+        formula: &str,
+        label: &str,
+    ) -> FunctionLayer {
         FunctionLayer {
             _func: f,
             _formula: formula.into(),
@@ -152,13 +163,12 @@ impl Display for FunctionLayer {
     }
 }
 
-impl Forward for FunctionLayer {
+impl Parameters for FunctionLayer {}
+
+impl Layer for FunctionLayer {
     fn forward(&self, inp: &TensorShared) -> TensorShared {
         (self._func)(inp)
     }
-}
-impl Parameters for FunctionLayer {}
-impl Layer for FunctionLayer {
     fn layer_name(&self) -> &str {
         &self._label
     }
@@ -188,7 +198,7 @@ mod tests {
         assert_eq!(out.derivative_as_col_vector().unwrap(), &[1., 1.]);
         assert_eq!(
             layer
-                .parameters()
+                .param_iter()
                 .map(|p| p.derivative())
                 .collect::<Vec<_>>(),
             expected_derivative1
@@ -215,7 +225,7 @@ mod tests {
         assert_eq!(out.derivative_as_col_vector().unwrap(), &[1., 1.]);
         assert_eq!(
             layer
-                .parameters()
+                .param_iter()
                 .map(|p| p.derivative())
                 .collect::<Vec<_>>(),
             expected_derivative1

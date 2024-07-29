@@ -1,16 +1,16 @@
 use retext::data_preparing::data_set::DataSet;
 
-use retext::nnetwork::{FloatType, ReText};
+use retext::nnetwork::{FloatType, ParameterBundle, ReText};
 
 fn main() {
     let data = DataSet::new("./datasets/tiny_shakespeare.txt", 1.0, true);
     let cycles = 1000;
-    let learning_rate = 1 as FloatType;
-    let training_batch_size = 10;
-    let data_block_size = 3;
-    let n_hidden_layers = 0;
-    let embed_dim = Some(2);
-    let layer_size = 4;
+    let learning_rate = 0.001 as FloatType;
+    let training_batch_size = 1024;
+    let block_size = 3;
+    let n_hidden_layers = 3;
+    let embed_dim = Some(10);
+    let layer_size = 200;
     let regularization: Option<FloatType> = None;
     let verbose = true;
     let prediction_seed = "Once upon a time ";
@@ -18,8 +18,8 @@ fn main() {
 
     let mut retext = ReText::new(
         data,
-        training_batch_size - data_block_size,
-        data_block_size,
+        training_batch_size - block_size,
+        block_size,
         embed_dim,
         n_hidden_layers,
         layer_size,
@@ -29,10 +29,14 @@ fn main() {
         .predict(prediction_seed, prediction_length)
         .unwrap();
 
-    if let Err(err) = retext.import_parameters("shakespeare.param") {
+    match ParameterBundle::import_parameters("shakespeare.param") {
+        Ok(bundle) => {
+            retext.load_trainer_parameter_bundle(&bundle);
+        }
+        Err(err) =>
         match err.kind() {
             std::io::ErrorKind::NotFound | std::io::ErrorKind::UnexpectedEof => 
-                println!("Parameter import failed, using randomly initialized parameters instead."),
+                eprintln!("Parameter import failed, using randomly initialized parameters instead."),
             _ => panic!("Parameter import failed: {}", err),
         }
     }
@@ -42,7 +46,9 @@ fn main() {
         training_batch_size,
         verbose,
     );
-    retext.export_parameters("shakespeare.param").unwrap();
+    let bundle = retext.get_parameter_bundle();
+    bundle.export_parameters("shakespeare.param").unwrap();
+    retext.load_predictor_parameter_bundle(&bundle);
 
     let text_with_training = retext
         .predict(prediction_seed, prediction_length)

@@ -3,11 +3,11 @@ use std::fmt::Display;
 use rand::Rng;
 
 use crate::nnetwork::{
-    calculation_nodes::{NetworkCalculation, TensorShared},
-    Forward, TensorShape,
+    calculation_nodes::{NetworkCalculation, TensorShared}, mlp::ParameterBundle, TensorShape
 };
 
-use crate::nnetwork::mlp::layer_traits::{Layer, Parameters};
+use crate::nnetwork::mlp::Layer;
+use crate::nnetwork::mlp::Parameters;
 
 pub struct Predictor {
     _layers: Vec<Box<dyn Layer>>,
@@ -44,15 +44,17 @@ impl Predictor {
         }
         TensorShared::from_vector(vec, inp.shape())
     }
-}
-
-impl Forward for Predictor {
-    fn forward(&self, inp: &TensorShared) -> TensorShared {
+    
+    pub fn forward(&self, inp: &TensorShared) -> TensorShared {
         self._fw_inp
             .borrow_mut()
             .set_value(inp.borrow().value().to_vec());
         let out = self._calc.evaluate();
         TensorShared::from_vector(out.value(), out.shape())
+    }
+    
+    pub fn load_parameter_bundle(&self, bundle: &ParameterBundle){
+        bundle.load_parameters(&self._layers)
     }
 }
 
@@ -67,8 +69,8 @@ impl Display for Predictor {
 }
 
 impl Parameters for Predictor {
-    fn parameters(&self) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
-        Box::new(self._layers.iter().flat_map(|l| l.parameters()))
+    fn param_iter(&self) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
+        Box::new(self._layers.iter().flat_map(|l| l.param_iter()))
     }
 }
 
