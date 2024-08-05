@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Instant};
+use std::collections::HashSet;
 
 use super::*;
 
@@ -62,15 +62,9 @@ impl NetworkCalculation {
         let mut visited: HashSet<usize> = HashSet::new();
         let mut sorted: Vec<OpNodeShared> = Vec::new();
 
-        let timer = Instant::now();
         if let Some(from_op) = &root.parent_op() {
             topo_sort_recursive(from_op, &mut visited, &mut sorted);
         }
-        println!(
-            "Collection of {} nodes took {} ms",
-            visited.len(),
-            timer.elapsed().as_millis()
-        );
 
         sorted
     }

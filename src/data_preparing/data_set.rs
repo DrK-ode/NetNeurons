@@ -24,7 +24,7 @@ impl DataSet {
         let mut validation_data = Vec::new();
         let mut n_newlines = (data.lines().count() as f32 * training_ratio) as usize - 1;
         for line in data.lines() {
-            if n_newlines == 0{
+            if n_newlines == 0 {
                 validation_data.push(line.to_string());
                 continue;
             }
@@ -33,8 +33,8 @@ impl DataSet {
         }
 
         let mut chars = Vec::new();
-        data.chars().for_each(|c| {
-            if !chars.contains(&c) {
+        data.chars().for_each(|c: char| {
+            if c.is_ascii_alphabetic() && !chars.contains(&c) {
                 chars.push(c);
             }
         });
@@ -52,6 +52,10 @@ impl DataSet {
         if !self._chars.contains(&c) {
             self._chars.push(c);
         }
+    }
+
+    pub fn characters(&self) -> &[char] {
+        &self._chars
     }
 
     fn get_string_from_file(path: &str, lowercase: bool) -> String {

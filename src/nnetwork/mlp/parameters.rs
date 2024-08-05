@@ -66,14 +66,14 @@ impl ParameterBundle {
             match file {
                 Ok(file) => {
                     if counter > 0 {
-                        println!("Exporting parameters to; {fn_string}");
+                        eprintln!("Changing export filename to; {fn_string}");
                     }
                     break file;
                 }
                 Err(err) => match err.kind() {
                     std::io::ErrorKind::AlreadyExists => (),
                     _ => {
-                        println!("Export parameters failed: {}", err)
+                        eprintln!("Export parameters failed: {}", err)
                     }
                 },
             }

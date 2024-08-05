@@ -343,14 +343,14 @@ impl Operator for MulOp {
                 ._derivative
                 .iter_mut()
                 .zip(&out.borrow_mut()._derivative)
-                .for_each(|(d, chain)| *d = val2 * chain);
-            inp2.borrow_mut()._derivative[0] = inp1
+                .for_each(|(d, chain)| *d += val2 * chain);
+            inp2.borrow_mut()._derivative[0] += inp1
                 .borrow()
                 ._value
                 .iter()
                 .zip(&out.borrow()._derivative)
                 .map(|(v, chain)| v * chain)
-                .sum();
+                .sum::<FloatType>();
             return;
         }
         let size = inp[0].len();

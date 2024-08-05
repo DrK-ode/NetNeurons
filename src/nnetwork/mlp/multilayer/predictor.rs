@@ -44,7 +44,15 @@ impl Predictor {
         }
         TensorShared::from_vector(vec, inp.shape())
     }
-    
+
+    pub fn embed(&self, inp: &TensorShared) -> TensorShared {
+        let embed = self._layers[0].param_iter().next().unwrap();
+        let value = embed.value();
+        let shape = embed.shape();
+        let matrix = TensorShared::from_vector(value, shape);
+        NetworkCalculation::new(&matrix.dot(inp)).evaluate()
+    }
+
     pub fn forward(&self, inp: &TensorShared) -> TensorShared {
         self._fw_inp
             .borrow_mut()
@@ -52,8 +60,8 @@ impl Predictor {
         let out = self._calc.evaluate();
         TensorShared::from_vector(out.value(), out.shape())
     }
-    
-    pub fn load_parameter_bundle(&self, bundle: &ParameterBundle){
+
+    pub fn load_parameter_bundle(&self, bundle: &ParameterBundle) {
         bundle.load_parameters(&self._layers)
     }
 }

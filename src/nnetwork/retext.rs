@@ -43,14 +43,14 @@ impl ReText {
             );
             layers.push(Box::new(embed_layer));
             layers.push(Box::new(reshape_layer));
+            layers.push(Box::new(non_linearity.clone()));
             layers.push(Box::new(resize_layer));
         } else {
             let resize_layer =
                 LinearLayer::from_rand(layer_dim, n_chars, BIASED_LAYERS, "Resizing layer (in)");
             layers.push(Box::new(resize_layer));
         }
-        let regularize_layer = non_linearity.clone();
-        layers.push(Box::new(regularize_layer));
+        layers.push(Box::new(non_linearity.clone()));
 
         // Hidden layers
         for n in 0..n_hidden_layers {
@@ -123,7 +123,7 @@ impl ReText {
             let timer = Instant::now();
             let loss = self._trainer.train(&correlations, learning_rate);
             if verbose {
-                let width = (cycles as f64).log10() as usize;
+                let width = (cycles as f64).log10() as usize + 1;
                 println!(
                     "Cycle #{n: >width$}: [ loss: {:.3e}, duration: {} µs ]",
                     loss.value_as_scalar().unwrap(),
@@ -146,7 +146,7 @@ impl ReText {
         let mut line_idx = rand::thread_rng().gen_range(0..n_lines);
         while correlations.len() < n {
             let line = &data[line_idx];
-            let s = "".to_string() + &pad + line + &pad;
+            let s = "".to_string() + &pad + line + "^";
             s.char_indices()
                 .zip(s.char_indices().skip(self._block_size))
                 .map(|((i, _prev), (j, next))| {
@@ -198,6 +198,15 @@ impl ReText {
             s.push(c);
         }
         Ok(s[self._block_size..].to_string())
+    }
+    
+    pub fn characters(&self) -> &[char] {
+        self._dataset.characters()
+    }
+    
+    pub fn embed(&self, inp: &str) -> TensorShared {
+        let inp = self._dataset.encode(inp).unwrap();
+        self._predictor.embed(&inp)
     }
 
     pub fn get_parameter_bundle(&self) -> ParameterBundle {

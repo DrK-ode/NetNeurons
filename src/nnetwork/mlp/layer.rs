@@ -115,7 +115,7 @@ impl Layer for ReshapeLayer {
         out.reshape(self._shape);
         out
     }
-    
+
     fn layer_name(&self) -> &str {
         &self._label
     }
@@ -148,7 +148,7 @@ impl FunctionLayer {
 
     pub fn tanh(inp: &TensorShared) -> TensorShared {
         let one = TensorShared::from_vector(vec![1.; inp.len()], inp.shape());
-        let exp2 = (inp * TensorShared::from_scalar(2.)).exp();
+        let exp2 = (-inp * TensorShared::from_scalar(2.)).exp();
         (&one - &exp2) / (&one + &exp2)
     }
 
@@ -178,6 +178,7 @@ impl Layer for FunctionLayer {
 mod tests {
     use super::*;
     use crate::nnetwork::calculation_nodes::NetworkCalculation;
+    use assert_approx_eq::assert_approx_eq;
 
     #[test]
     fn unbiased_layer_forward() {
@@ -231,5 +232,23 @@ mod tests {
             expected_derivative1
         );
         assert_eq!(inp.derivative(), expected_derivative2);
+    }
+
+    #[test]
+    fn tanh_forward() {
+        let layer = FunctionLayer::new(&FunctionLayer::tanh, "tanh", "TestLayer");
+        let inp = TensorShared::from_vector(vec![-10., -2., -1., 0., 1., 2., 10.], (7, 1, 1));
+        let expected_value = &[-1., -0.9640276, -0.7615942, 0., 0.7615942, 0.9640276, 1.];
+        let out = layer.forward(&inp);
+        let calc = NetworkCalculation::new(&out);
+        calc.evaluate();
+        for (value, expected_value) in out
+            .value_as_col_vector()
+            .unwrap()
+            .iter()
+            .zip(expected_value)
+        {
+            assert_approx_eq!(value, expected_value);
+        }
     }
 }
