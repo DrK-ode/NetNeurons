@@ -4,10 +4,13 @@ use crate::nnetwork::{
     calculation_nodes::{FloatType, NetworkCalculation, TensorShared}, mlp::ParameterBundle, Layer, Parameters, TensorShape
 };
 
+type LossFuncType = dyn Fn(&TensorShared, &TensorShared)->TensorShared;
+ 
 pub struct Trainer {
     _layers: Vec<Box<dyn Layer>>,
     _inp: Vec<(TensorShared, TensorShared)>,
     _calc: NetworkCalculation,
+    _loss_function: Box<LossFuncType>
 }
 
 impl Trainer {
@@ -17,7 +20,7 @@ impl Trainer {
         batch_size: usize,
         layers: Vec<Box<dyn Layer>>,
         regularization: Option<FloatType>,
-        loss_func: &'static dyn Fn(&TensorShared, &TensorShared) -> TensorShared,
+        loss_func: &'static LossFuncType
     ) -> Self {
         let inp = (0..batch_size)
             .map(|_| {
@@ -32,14 +35,19 @@ impl Trainer {
             _layers: layers,
             _inp: inp,
             _calc: calc,
+            _loss_function: Box::new(loss_func)
         }
+    }
+    
+    pub fn loss(&self, inp: &TensorShared, truth: &TensorShared) -> TensorShared{
+        (self._loss_function)(inp,truth)
     }
 
     fn define_train_calc(
         layers: &[Box<dyn Layer>],
         inp: &[(TensorShared, TensorShared)],
         regularization: Option<FloatType>,
-        loss_func: &'static dyn Fn(&TensorShared, &TensorShared) -> TensorShared,
+        loss_func: &'static LossFuncType,
     ) -> NetworkCalculation {
         // Copy input data into place
         let outs = inp

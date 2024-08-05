@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use crate::{
     data_preparing::data_set::{DataSet, DataSetError},
-    nnetwork::{Parameters, ReshapeLayer},
+    nnetwork::{calculation_nodes::NetworkCalculation, Parameters, ReshapeLayer},
 };
 
 use super::{
@@ -109,6 +109,17 @@ impl ReText {
         }
     }
 
+    fn validate(&self, inp: &[(TensorShared, TensorShared)]) -> FloatType {
+        inp.iter()
+            .map(|(inp, truth)| {
+                let fwd = self._predictor.forward(inp);
+                let loss = NetworkCalculation::new(&self._trainer.loss(&fwd, truth)).evaluate();
+                loss.value_as_scalar().unwrap()
+            })
+            .sum::<FloatType>()
+            / (inp.len() as FloatType)
+    }
+
     pub fn train(
         &mut self,
         cycles: usize,
@@ -122,6 +133,7 @@ impl ReText {
             let correlations = self.extract_correlations(training_data, data_size);
             let timer = Instant::now();
             let loss = self._trainer.train(&correlations, learning_rate);
+
             if verbose {
                 let width = (cycles as f64).log10() as usize + 1;
                 println!(
@@ -136,6 +148,14 @@ impl ReText {
             self._trainer.param_iter().map(|p| p.len()).sum::<usize>(),
             timer.elapsed().as_millis()
         );
+        
+        
+        self.load_predictor_parameter_bundle(&self._trainer.get_parameter_bundle());
+
+        let validation_data = self._dataset.validation_data();
+        let correlations = self.extract_correlations(validation_data, usize::MAX);
+        let validation = self.validate(&correlations);
+        println!("Validation loss: {}", validation);
     }
 
     // Returns a list of all correlations in the data encoded as a tuple of Matrix(m*n) and ColumnVector(n).
@@ -143,7 +163,8 @@ impl ReText {
         let n_lines = data.len();
         let mut correlations = Vec::new();
         let pad = "^".to_string().repeat(self._block_size);
-        let mut line_idx = rand::thread_rng().gen_range(0..n_lines);
+        let start_idx = rand::thread_rng().gen_range(0..n_lines);
+        let mut line_idx = start_idx;
         while correlations.len() < n {
             let line = &data[line_idx];
             let s = "".to_string() + &pad + line + "^";
@@ -167,6 +188,9 @@ impl ReText {
             line_idx += 1;
             if line_idx >= data.len() {
                 line_idx = 0;
+            }
+            if line_idx == start_idx {
+                break;
             }
         }
         correlations.truncate(n);
@@ -199,11 +223,11 @@ impl ReText {
         }
         Ok(s[self._block_size..].to_string())
     }
-    
+
     pub fn characters(&self) -> &[char] {
         self._dataset.characters()
     }
-    
+
     pub fn embed(&self, inp: &str) -> TensorShared {
         let inp = self._dataset.encode(inp).unwrap();
         self._predictor.embed(&inp)

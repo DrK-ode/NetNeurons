@@ -24,12 +24,12 @@ impl DataSet {
         let mut validation_data = Vec::new();
         let mut n_newlines = (data.lines().count() as f32 * training_ratio) as usize - 1;
         for line in data.lines() {
-            if n_newlines == 0 {
+            if n_newlines > 0 {
+                training_data.push(line.to_string());
+                n_newlines -= 1;
+            } else {
                 validation_data.push(line.to_string());
-                continue;
             }
-            training_data.push(line.to_string());
-            n_newlines -= 1;
         }
 
         let mut chars = Vec::new();

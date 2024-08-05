@@ -6,9 +6,9 @@ use retext::data_preparing::data_set::DataSet;
 use retext::nnetwork::{FloatType, ParameterBundle, ReText};
 
 fn main() {
-    let mut data = DataSet::new("./datasets/names.txt", 0.8, true);
+    let mut data = DataSet::new("./datasets/names.txt", 0.9, true);
     data.add_character('^');
-    let cycles = 1000;
+    let cycles = 0;
     let learning_rate = 0.00005 as FloatType;
     let training_batch_size = 10000;
     let block_size = 3;
@@ -47,7 +47,6 @@ fn main() {
     if let Ok(filename) = bundle.export_parameters("out.param") {
         println!("Exported parameters to: {filename}");
     }
-    retext.load_predictor_parameter_bundle(&bundle);
 
     println!("No training: {}", text_no_training);
     println!("With training:");
