@@ -3,19 +3,16 @@ use std::time::Instant;
 
 use crate::{
     data_preparing::data_set::{DataSet, DataSetError},
-    nnetwork::{calculation_nodes::NetworkCalculation, Parameters, ReshapeLayer},
+    nnetwork::{FunctionLayer, LinearLayer, Parameters, ReshapeLayer},
 };
 
-use super::{
-    mlp::ParameterBundle, FloatType, FunctionLayer, Layer, LinearLayer, Predictor, TensorShared,
-    Trainer,
-};
+use super::{CalcNodeShared, FloatType, Layer, MultiLayer, ParameterBundle};
 
 pub struct ReText {
     _dataset: DataSet,
-    _trainer: Trainer,
-    _predictor: Predictor,
+    _mlp: MultiLayer,
     _block_size: usize,
+    _embedding: bool,
 }
 
 impl ReText {
@@ -33,8 +30,7 @@ impl ReText {
         //Embed
         if let Some(embed_dim) = embed_dim {
             let embed_layer = LinearLayer::from_rand(embed_dim, n_chars, false, "Embedding layer");
-            let reshape_layer =
-                ReshapeLayer::new((block_size * embed_dim, 1, 1), "Reshaping layer");
+            let reshape_layer = ReshapeLayer::new((block_size * embed_dim, 1), "Reshaping layer");
             let resize_layer = LinearLayer::from_rand(
                 layer_dim,
                 block_size * embed_dim,
@@ -82,7 +78,6 @@ impl ReText {
 
     pub fn new(
         data: DataSet,
-        batch_size: usize,
         block_size: usize,
         embed_dim: Option<usize>,
         n_hidden_layers: usize,
@@ -90,34 +85,23 @@ impl ReText {
         regularization: Option<FloatType>,
     ) -> ReText {
         let n_chars = data.number_of_chars();
-        let training_layers =
+        let layers =
             Self::create_layers(n_chars, block_size, embed_dim, n_hidden_layers, layer_dim);
-        let predicting_layers =
-            Self::create_layers(n_chars, block_size, embed_dim, n_hidden_layers, layer_dim);
+        let mut mlp = MultiLayer::new(layers);
+        mlp.set_regularization(regularization);
+        mlp.set_loss_function(&MultiLayer::neg_log_likelihood);
         ReText {
             _dataset: data,
-            _trainer: Trainer::new(
-                (n_chars, block_size, 1),
-                (n_chars, 1, 1),
-                batch_size,
-                training_layers,
-                regularization,
-                &Trainer::neg_log_likelihood,
-            ),
-            _predictor: Predictor::new((n_chars, block_size, 1), predicting_layers),
             _block_size: block_size,
+            _mlp: mlp,
+            _embedding: embed_dim.is_some(),
         }
     }
 
-    fn validate(&self, inp: &[(TensorShared, TensorShared)]) -> FloatType {
-        inp.iter()
-            .map(|(inp, truth)| {
-                let fwd = self._predictor.forward(inp);
-                let loss = NetworkCalculation::new(&self._trainer.loss(&fwd, truth)).evaluate();
-                loss.value_as_scalar().unwrap()
-            })
-            .sum::<FloatType>()
-            / (inp.len() as FloatType)
+    fn validate(&self, data_size: usize) -> FloatType {
+        let data = self._dataset.training_data();
+        let correlations = self.extract_correlations(data, data_size);
+        self._mlp.loss(&correlations).value_indexed(0)
     }
 
     pub fn train(
@@ -129,37 +113,44 @@ impl ReText {
     ) {
         let timer = Instant::now();
         for n in 0..cycles {
-            let training_data = self._dataset.training_data();
-            let correlations = self.extract_correlations(training_data, data_size);
+            let data = self._dataset.training_data();
+            let correlations = self.extract_correlations(data, data_size);
             let timer = Instant::now();
-            let loss = self._trainer.train(&correlations, learning_rate);
+            let loss = self._mlp.train(&correlations, learning_rate);
 
             if verbose {
                 let width = (cycles as f64).log10() as usize + 1;
                 println!(
                     "Cycle #{n: >width$}: [ loss: {:.3e}, duration: {} µs ]",
-                    loss.value_as_scalar().unwrap(),
+                    loss.value_indexed(0),
                     timer.elapsed().as_micros()
                 );
             }
         }
         println!(
             "Trained network with {} parameters for {cycles} cycles in {} ms.",
-            self._trainer.param_iter().map(|p| p.len()).sum::<usize>(),
+            self._mlp.param_iter().map(|p| p.len()).sum::<usize>(),
             timer.elapsed().as_millis()
         );
-        
-        
-        self.load_predictor_parameter_bundle(&self._trainer.get_parameter_bundle());
 
-        let validation_data = self._dataset.validation_data();
-        let correlations = self.extract_correlations(validation_data, usize::MAX);
-        let validation = self.validate(&correlations);
+        let validation = self.validate(usize::MAX);
         println!("Validation loss: {}", validation);
     }
 
+    pub fn embed(&self, inp: &str) -> CalcNodeShared {
+        let inp = self._dataset.encode(inp).unwrap();
+        if !self._embedding {
+            return inp.clone();
+        }
+        self._mlp.get_layer(0).forward(&inp)
+    }
+
     // Returns a list of all correlations in the data encoded as a tuple of Matrix(m*n) and ColumnVector(n).
-    fn extract_correlations(&self, data: &[String], n: usize) -> Vec<(TensorShared, TensorShared)> {
+    fn extract_correlations(
+        &self,
+        data: &[String],
+        n: usize,
+    ) -> Vec<(CalcNodeShared, CalcNodeShared)> {
         let n_lines = data.len();
         let mut correlations = Vec::new();
         let pad = "^".to_string().repeat(self._block_size);
@@ -214,7 +205,7 @@ impl ReText {
         // The following line break upon non ascii input
         let mut last = self._dataset.encode(&s[range])?;
         for _ in 0..number_of_characters {
-            last = Predictor::collapse(&self._predictor.forward(&last));
+            last = self._mlp.predict(&last);
             let c = self._dataset.decode(&last)?;
             if c == '^' {
                 break;
@@ -228,20 +219,15 @@ impl ReText {
         self._dataset.characters()
     }
 
-    pub fn embed(&self, inp: &str) -> TensorShared {
-        let inp = self._dataset.encode(inp).unwrap();
-        self._predictor.embed(&inp)
-    }
-
     pub fn get_parameter_bundle(&self) -> ParameterBundle {
-        self._trainer.get_parameter_bundle()
+        self._mlp.get_parameter_bundle()
     }
 
     pub fn load_trainer_parameter_bundle(&mut self, bundle: &ParameterBundle) {
-        self._trainer.load_parameter_bundle(bundle)
+        self._mlp.load_parameter_bundle(bundle)
     }
 
     pub fn load_predictor_parameter_bundle(&mut self, bundle: &ParameterBundle) {
-        self._predictor.load_parameter_bundle(bundle)
+        self._mlp.load_parameter_bundle(bundle)
     }
 }

@@ -1,7 +1,9 @@
-mod calculation_nodes;
+mod calc_node;
 mod mlp;
 mod retext;
 
+pub use calc_node::{CalcNodeShared, FloatType, NodeShape, NodeType, VecOrientation};
+pub use mlp::{
+    FunctionLayer, Layer, LinearLayer, MultiLayer, ParameterBundle, Parameters, ReshapeLayer,
+};
 pub use retext::ReText;
-pub use calculation_nodes::{FloatType, TensorShape, TensorShared, TensorType, VecOrientation};
-pub use mlp::{FunctionLayer, Layer, LinearLayer, Predictor, Trainer, Parameters, ParameterBundle, ReshapeLayer};

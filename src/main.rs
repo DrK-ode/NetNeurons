@@ -8,9 +8,9 @@ use retext::nnetwork::{FloatType, ParameterBundle, ReText};
 fn main() {
     let mut data = DataSet::new("./datasets/names.txt", 0.9, true);
     data.add_character('^');
-    let cycles = 0;
-    let learning_rate = 0.00005 as FloatType;
-    let training_batch_size = 10000;
+    let cycles = 100;
+    let learning_rate = 0.00001 as FloatType;
+    let training_batch_size = 50000;
     let block_size = 3;
     let n_hidden_layers = 3;
     let embed_dim = Some(10);
@@ -22,7 +22,7 @@ fn main() {
 
     let mut retext = ReText::new(
         data,
-        training_batch_size,
+        //training_batch_size,
         block_size,
         embed_dim,
         n_hidden_layers,
@@ -60,6 +60,7 @@ fn main() {
     }
 }
 
+// Only really makes sense for 2D embedding.
 fn plot_embedding(retext: &ReText) -> Result<(), Box<dyn std::error::Error>> {
     let drawing_area = BitMapBackend::new("plot.png", (2048, 2048)).into_drawing_area();
     drawing_area.fill(&WHITE)?;
@@ -76,7 +77,7 @@ fn plot_embedding(retext: &ReText) -> Result<(), Box<dyn std::error::Error>> {
             _ => BLUE,
         };
         let letter = letter.to_string();
-        let coords = retext.embed(&letter).value_as_col_vector().unwrap();
+        let coords = retext.embed(&letter).copy_vals();
         //println!("{letter} -> {:?}", coords);
         let empty = EmptyElement::at((coords[0], coords[1]));
         let circle = Circle::new((0, 0), 2, color);

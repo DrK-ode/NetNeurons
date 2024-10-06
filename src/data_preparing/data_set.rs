@@ -1,6 +1,6 @@
 use std::fs;
 
-use crate::nnetwork::{FloatType, TensorShared, TensorType, VecOrientation};
+use crate::nnetwork::{CalcNodeShared, FloatType, NodeType, VecOrientation};
 
 #[derive(Debug, PartialEq)]
 pub enum DataSetError {
@@ -82,18 +82,18 @@ impl DataSet {
         self._chars.len()
     }
 
-    pub fn decode(&self, vector: &TensorShared) -> Result<char, DataSetError> {
-        if vector.tensor_type() != TensorType::Vector(VecOrientation::Column) {
+    pub fn decode(&self, vector: &CalcNodeShared) -> Result<char, DataSetError> {
+        if vector.node_type() != NodeType::Vector(VecOrientation::Column) {
             panic!("Can only decode column vectors.");
         }
-        let index: Vec<usize> = vector
-            .value()
+        let index: Vec<usize> = vector.borrow()
+            .vals()
             .iter()
             .enumerate()
             .filter_map(|(n, &elem)| if elem > 0. { Some(n) } else { None })
             .collect();
         if index.len() != 1 {
-            return Err(DataSetError::DecodingVector(vector.value().to_vec()));
+            return Err(DataSetError::DecodingVector(vector.copy_vals()));
         }
         let index = index[0];
         Ok(self
@@ -103,32 +103,28 @@ impl DataSet {
         .copied()
     }
 
-    pub fn decode_string(&self, v: &[&TensorShared]) -> Result<String, DataSetError> {
+    pub fn decode_string(&self, v: &[&CalcNodeShared]) -> Result<String, DataSetError> {
         v.iter().map(|v| self.decode(v)).collect()
     }
 
-    pub fn encode(&self, s: &str) -> Result<TensorShared, DataSetError> {
+    pub fn encode(&self, s: &str) -> Result<CalcNodeShared, DataSetError> {
         let n_rows = self._chars.len();
         let n_cols = s.len();
-        let mut out = TensorShared::from_vector(vec![0.; n_rows * n_cols], (n_rows, n_cols, 1));
+        let mut out_vec = vec![0.; n_rows * n_cols];
         for (col, ch) in s.chars().enumerate() {
             if let Some(row) = self._chars.iter().position(|&k| ch == k) {
-                out.set_index(row, col, 0, 1.);
+                out_vec[row*n_cols + col] = 1.;
             } else {
                 return Err(DataSetError::Encoding(ch));
             }
         }
-        Ok(out)
+        Ok( CalcNodeShared::filled_from_shape((n_rows,n_cols), out_vec ) )
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn import_shakespeare() -> DataSet {
-        DataSet::new("./datasets/tiny_shakespeare.txt", 0.9, false)
-    }
 
     #[test]
     #[should_panic]
@@ -138,14 +134,14 @@ mod tests {
 
     #[test]
     fn reading_all_shakespeare() {
-        let ds = import_shakespeare();
+        let ds = DataSet::new("./datasets/tiny_shakespeare.txt", 1., false);
         assert!(ds._data.starts_with("First Citizen:"));
         assert!(ds._data.ends_with("Whiles thou art waking.\n"));
     }
 
     #[test]
     fn finding_all_characters_in_shakespeare() {
-        let ds = import_shakespeare();
-        assert_eq!(ds.number_of_chars(), 64);
+        let ds = DataSet::new("./datasets/tiny_shakespeare.txt", 1., true);
+        assert_eq!(ds.number_of_chars(), 26);
     }
 }

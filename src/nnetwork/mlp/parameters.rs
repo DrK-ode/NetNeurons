@@ -2,13 +2,12 @@ use std::fs::read_to_string;
 use std::io::Write;
 use std::{fs::File, iter::empty};
 
-use crate::nnetwork::calculation_nodes::TensorShared;
-use crate::nnetwork::FloatType;
+use crate::nnetwork::{CalcNodeShared, FloatType};
 
 use super::Layer;
 
 pub trait Parameters {
-    fn param_iter(&self) -> Box<dyn Iterator<Item = &TensorShared> + '_> {
+    fn param_iter(&self) -> Box<dyn Iterator<Item = &CalcNodeShared> + '_> {
         Box::new(empty())
     }
 }
@@ -24,7 +23,7 @@ impl ParameterBundle {
         for layer in layers {
             let mut layer_vec = Vec::new();
             for param in layer.param_iter() {
-                layer_vec.push(param.value());
+                layer_vec.push(param.copy_vals());
             }
             parameters.push((layer.layer_name().to_owned(), layer_vec));
         }
@@ -52,7 +51,7 @@ impl ParameterBundle {
                     param.len(),
                     param_stored.len()
                 );
-                param.borrow_mut().set_value(param_stored.clone());
+                param.set_vals(param_stored);
             }
         }
     }
@@ -141,8 +140,8 @@ mod tests {
     #[test]
     fn parameter_bundle_transfer() {
         let layers: Vec<Box<dyn Layer>> = vec![
-            Box::new(LinearLayer::from_tensors(
-                TensorShared::from_vector(vec![1., 2., 3., 4., 5., 6.], (3, 2, 1)),
+            Box::new(LinearLayer::from_nodes(
+                CalcNodeShared::filled_from_shape((3,2), vec![1., 2., 3., 4., 5., 6.]),
                 None,
                 "TestLayer",
             )),
@@ -151,15 +150,15 @@ mod tests {
                 "tanh",
                 "TestLayer",
             )),
-            Box::new(LinearLayer::from_tensors(
-                TensorShared::from_vector(vec![1., -1., 1., -1., 1., -1.], (2, 3, 1)),
+            Box::new(LinearLayer::from_nodes(
+                CalcNodeShared::filled_from_shape((2,3),vec![1., -1., 1., -1., 1., -1.]),
                 None,
                 "TestLayer",
             )),
         ];
         let layers_copy: Vec<Box<dyn Layer>> = vec![
-            Box::new(LinearLayer::from_tensors(
-                TensorShared::from_vector(vec![0.; 6], (3, 2, 1)),
+            Box::new(LinearLayer::from_nodes(
+                CalcNodeShared::filled_from_shape((3,2),vec![0.; 6]),
                 None,
                 "TestLayer",
             )),
@@ -168,8 +167,8 @@ mod tests {
                 "tanh",
                 "TestLayer",
             )),
-            Box::new(LinearLayer::from_tensors(
-                TensorShared::from_vector(vec![0.; 6], (2, 3, 1)),
+            Box::new(LinearLayer::from_nodes(
+                CalcNodeShared::filled_from_shape((2,3),vec![0.; 6]),
                 None,
                 "TestLayer",
             )),
