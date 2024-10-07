@@ -99,7 +99,7 @@ impl ReText {
     }
 
     fn validate(&self, data_size: usize) -> FloatType {
-        let data = self._dataset.training_data();
+        let data = self._dataset.validation_data();
         let correlations = self.extract_correlations(data, data_size);
         self._mlp.loss(&correlations).value_indexed(0)
     }
@@ -133,7 +133,7 @@ impl ReText {
             timer.elapsed().as_millis()
         );
 
-        let validation = self.validate(usize::MAX);
+        let validation = self.validate(data_size);
         println!("Validation loss: {}", validation);
     }
 
@@ -145,6 +145,26 @@ impl ReText {
         self._mlp.get_layer(0).forward(&inp)
     }
 
+    fn get_correlations_from_str(&self, line: &str) -> Vec<(CalcNodeShared, CalcNodeShared)> {
+        let pad = "^".to_string().repeat(self._block_size);
+        let s = "".to_string() + &pad + line + "^";
+        s.char_indices()
+            .zip(s.char_indices().skip(self._block_size))
+            .map(|((i, _prev), (j, next))| {
+                let prev = &s[i..j];
+                let next = next.to_string();
+                (
+                    self._dataset
+                        .encode(prev)
+                        .expect("Cannot encode character: {prev}"),
+                    self._dataset
+                        .encode(&next)
+                        .expect("Cannot encode character: {next}"),
+                )
+            })
+            .collect()
+    }
+
     // Returns a list of all correlations in the data encoded as a tuple of Matrix(m*n) and ColumnVector(n).
     fn extract_correlations(
         &self,
@@ -153,29 +173,11 @@ impl ReText {
     ) -> Vec<(CalcNodeShared, CalcNodeShared)> {
         let n_lines = data.len();
         let mut correlations = Vec::new();
-        let pad = "^".to_string().repeat(self._block_size);
         let start_idx = rand::thread_rng().gen_range(0..n_lines);
         let mut line_idx = start_idx;
         while correlations.len() < n {
             let line = &data[line_idx];
-            let s = "".to_string() + &pad + line + "^";
-            s.char_indices()
-                .zip(s.char_indices().skip(self._block_size))
-                .map(|((i, _prev), (j, next))| {
-                    let prev = &s[i..j];
-                    let next = next.to_string();
-                    (
-                        self._dataset
-                            .encode(prev)
-                            .expect("Cannot encode character: {prev}"),
-                        self._dataset
-                            .encode(&next)
-                            .expect("Cannot encode character: {next}"),
-                    )
-                })
-                .for_each(|corr| {
-                    correlations.push(corr);
-                });
+            correlations.append(&mut self.get_correlations_from_str(line));
             line_idx += 1;
             if line_idx >= data.len() {
                 line_idx = 0;
@@ -201,10 +203,10 @@ impl ReText {
                 self._block_size
             );
         }
-        let range = (s.len() - self._block_size)..;
-        // The following line break upon non ascii input
-        let mut last = self._dataset.encode(&s[range])?;
         for _ in 0..number_of_characters {
+            let range = (s.len() - self._block_size)..;
+            // The following line break upon non ascii input
+            let mut last = self._dataset.encode(&s[range])?;
             last = self._mlp.predict(&last);
             let c = self._dataset.decode(&last)?;
             if c == '^' {

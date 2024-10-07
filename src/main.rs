@@ -9,12 +9,12 @@ fn main() {
     let mut data = DataSet::new("./datasets/names.txt", 0.9, true);
     data.add_character('^');
     let cycles = 100;
-    let learning_rate = 0.00001 as FloatType;
-    let training_batch_size = 50000;
+    let learning_rate = 0.1 as FloatType;
+    let training_batch_size = 1000;
     let block_size = 3;
-    let n_hidden_layers = 3;
-    let embed_dim = Some(10);
-    let layer_size = 100;
+    let n_hidden_layers = 2;
+    let embed_dim = Some(2);
+    let layer_size = 30;
     let regularization = None;
     let verbose = true;
     let prediction_seed = "steph";
@@ -55,8 +55,10 @@ fn main() {
         println!("{text_with_training}");
     }
 
-    if embed_dim.is_some() {
-        plot_embedding(&retext).unwrap();
+    if let Some(dim) = embed_dim {
+        if dim == 2 {
+            plot_embedding(&retext).unwrap();
+        }
     }
 }
 

@@ -344,15 +344,15 @@ impl CalcNodeShared {
             if let Some(parents) = &child.borrow()._parent_nodes {
                 let base = &parents[0];
                 let power = &parents[1];
+                let power_val = power.value_indexed(0);
                 for i in 0..base.len() {
                     let base_val = base.value_indexed(i);
-                    let power_val = power.value_indexed(i);
                     let child_val = child.value_indexed(i);
                     let child_grad = child.gradient_indexed(i);
                     let gradient = child_grad * power_val * base_val.powf(power_val - 1.);
                     base.borrow_mut()._grad[i] += gradient;
                     let gradient = child_grad * base_val.ln() * child_val;
-                    power.borrow_mut()._grad[i] += gradient;
+                    power.borrow_mut()._grad[0] += gradient;
                 }
             }
         }));

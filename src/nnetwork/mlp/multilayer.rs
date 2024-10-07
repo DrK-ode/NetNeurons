@@ -93,7 +93,7 @@ impl MultiLayer {
 
     // Assumes the input can be treated as a probability distribution and that the truth is a one-hot vector
     pub fn neg_log_likelihood(inp: &CalcNodeShared, truth: &CalcNodeShared) -> CalcNodeShared {
-        -(inp * truth).sum().log()
+        -(inp.element_wise_mul(truth)).sum().log()
     }
     
     pub fn loss(&self, 
