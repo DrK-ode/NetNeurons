@@ -1,8 +1,8 @@
 use std::{cell::RefCell, fmt::Display, ops::Deref, rc::Rc};
 
-use super::{CalcNode, CalcNodeShared, FloatType, NodeShape, NodeType, VecOrientation};
+use super::{CalcNode, CalcNodeCore, FloatType, NodeShape, NodeType, VecOrientation};
 
-impl CalcNode {
+impl CalcNodeCore {
     pub fn vals(&self) -> &[FloatType] {
         &self._vals
     }
@@ -11,15 +11,15 @@ impl CalcNode {
     }
 }
 
-impl Deref for CalcNodeShared {
-    type Target = Rc<RefCell<CalcNode>>;
+impl Deref for CalcNode {
+    type Target = Rc<RefCell<CalcNodeCore>>;
 
     fn deref(&self) -> &Self::Target {
         &self._node
     }
 }
 
-impl CalcNodeShared {
+impl CalcNode {
     pub fn len(&self) -> usize {
         {
             let shape: &NodeShape = &self.shape();
@@ -32,7 +32,7 @@ impl CalcNodeShared {
     }
 }
 
-impl CalcNodeShared {
+impl CalcNode {
     pub fn node_type(&self) -> NodeType {
         match self.borrow()._shape {
             (0, _) | (_, 0) => {
@@ -59,7 +59,7 @@ impl CalcNodeShared {
     }
 }
 
-impl Display for CalcNodeShared {
+impl Display for CalcNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.node_type() {
             NodeType::None => {
@@ -125,8 +125,8 @@ impl Display for NodeType {
 }
 
 // Access methods
-impl CalcNodeShared {
-    pub fn copy_parents(&self) -> Option<Vec<CalcNodeShared>> {
+impl CalcNode {
+    pub fn copy_parents(&self) -> Option<Vec<CalcNode>> {
         self.borrow()._parent_nodes.clone()
     }
 
@@ -150,12 +150,12 @@ impl CalcNodeShared {
         self.borrow()._grad[i]
     }
 
-    pub fn set_vals(&self, vals: &[FloatType]) {
+    pub fn set_vals(&mut self, vals: &[FloatType]) {
         assert_eq!(vals.len(), self.borrow()._vals.len());
         self.borrow_mut()._vals = vals.to_vec();
     }
 
-    pub fn set_grad(&self, grad: &[FloatType]) {
+    pub fn set_grad(&mut self, grad: &[FloatType]) {
         assert_eq!(grad.len(), self.borrow()._grad.len());
         self.borrow_mut()._grad = grad.to_vec();
     }

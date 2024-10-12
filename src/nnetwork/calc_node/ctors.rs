@@ -3,19 +3,19 @@ use std::{cell::RefCell, rc::Rc};
 use rand::{thread_rng, Rng};
 use rand_distr::StandardNormal;
 
-use super::{types::{FloatType, NodeShape}, CalcNode, CalcNodeShared};
+use super::{types::{FloatType, NodeShape}, CalcNodeCore, CalcNode};
 
 // Ctors
-impl CalcNodeShared {
+impl CalcNode {
     fn size_of_shape(shape: &NodeShape) -> usize {
         shape.0 * shape.1
     }
 
     pub fn new() -> Self {
-        Self::from_node(CalcNode::default())
+        Self::from_node(CalcNodeCore::default())
     }
 
-    fn from_node(n: CalcNode) -> Self {
+    fn from_node(n: CalcNodeCore) -> Self {
         Self {
             _node: Rc::new(RefCell::new(n)),
         }
@@ -37,7 +37,7 @@ impl CalcNodeShared {
 
     pub fn empty_from_shape(shape: NodeShape) -> Self {
         let size = Self::size_of_shape(&shape);
-        Self::from_node(CalcNode {
+        Self::from_node(CalcNodeCore {
             _shape: shape,
             _vals: vec![f64::NAN; size],
             _grad: vec![f64::NAN; size],
@@ -48,7 +48,7 @@ impl CalcNodeShared {
     pub fn filled_from_shape(shape: NodeShape, value: Vec<FloatType>) -> Self {
         let size = Self::size_of_shape(&shape);
         assert_eq!(size, value.len());
-        Self::from_node(CalcNode {
+        Self::from_node(CalcNodeCore {
             _shape: shape,
             _vals: value,
             _grad: vec![f64::NAN; size],
@@ -58,7 +58,7 @@ impl CalcNodeShared {
 
     pub fn rand_from_shape(shape: NodeShape) -> Self {
         let size = Self::size_of_shape(&shape);
-        Self::from_node(CalcNode {
+        Self::from_node(CalcNodeCore {
             _shape: shape,
             _vals: (0..size)
                 .map(|_| thread_rng().sample(StandardNormal))

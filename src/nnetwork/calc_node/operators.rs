@@ -3,16 +3,16 @@ use std::{
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
-use super::CalcNodeShared;
+use super::CalcNode;
 
-impl Sum for CalcNodeShared {
+impl Sum for CalcNode {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.reduce(|sum, node| sum + node).unwrap()
     }
 }
 
-impl CalcNodeShared {
-    pub fn sum(&self) -> CalcNodeShared {
+impl CalcNode {
+    pub fn sum(&self) -> CalcNode {
         let result = Self::new_scalar(self.borrow()._vals.iter().sum());
         result.borrow_mut()._parent_nodes = Some(vec![self.clone()]);
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
@@ -26,35 +26,35 @@ impl CalcNodeShared {
         result
     }
 
-    pub fn normalized(&self) -> CalcNodeShared {
+    pub fn normalized(&self) -> CalcNode {
         self / self.sum()
     }
 }
 
-impl Add for CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Add for CalcNode {
+    type Output = CalcNode;
 
-    fn add(self, rhs: CalcNodeShared) -> Self::Output {
+    fn add(self, rhs: CalcNode) -> Self::Output {
         &self + &rhs
     }
 }
-impl Add<&CalcNodeShared> for CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Add<&CalcNode> for CalcNode {
+    type Output = CalcNode;
 
-    fn add(self, rhs: &CalcNodeShared) -> Self::Output {
+    fn add(self, rhs: &CalcNode) -> Self::Output {
         &self + rhs
     }
 }
-impl Add<CalcNodeShared> for &CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Add<CalcNode> for &CalcNode {
+    type Output = CalcNode;
 
-    fn add(self, rhs: CalcNodeShared) -> Self::Output {
+    fn add(self, rhs: CalcNode) -> Self::Output {
         self + &rhs
     }
 }
 
-impl Add for &CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Add for &CalcNode {
+    type Output = CalcNode;
 
     fn add(self, rhs: Self) -> Self::Output {
         // If self is a scalar make it the RHS
@@ -76,7 +76,7 @@ impl Add for &CalcNodeShared {
         } else {
             panic!("Invalid operands for addition.");
         };
-        let result = CalcNodeShared::filled_from_shape(a.shape(), result);
+        let result = CalcNode::filled_from_shape(a.shape(), result);
         result.borrow_mut()._parent_nodes = Some(vec![a.clone(), b.clone()]);
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
             if let Some(parents) = &child.borrow()._parent_nodes {
@@ -93,32 +93,32 @@ impl Add for &CalcNodeShared {
     }
 }
 
-impl Mul<CalcNodeShared> for CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Mul<CalcNode> for CalcNode {
+    type Output = CalcNode;
 
-    fn mul(self, rhs: CalcNodeShared) -> Self::Output {
+    fn mul(self, rhs: CalcNode) -> Self::Output {
         &self * &rhs
     }
 }
 
-impl Mul<&CalcNodeShared> for CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Mul<&CalcNode> for CalcNode {
+    type Output = CalcNode;
 
-    fn mul(self, rhs: &CalcNodeShared) -> Self::Output {
+    fn mul(self, rhs: &CalcNode) -> Self::Output {
         &self * rhs
     }
 }
 
-impl Mul<CalcNodeShared> for &CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Mul<CalcNode> for &CalcNode {
+    type Output = CalcNode;
 
-    fn mul(self, rhs: CalcNodeShared) -> Self::Output {
+    fn mul(self, rhs: CalcNode) -> Self::Output {
         self * &rhs
     }
 }
 
-impl Mul for &CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Mul for &CalcNode {
+    type Output = CalcNode;
 
     fn mul(self, other: Self) -> Self::Output {
         // If self is a scalar make it the RHS
@@ -128,7 +128,7 @@ impl Mul for &CalcNodeShared {
         if b.len() == 1 {
             let scalar = b.value_indexed(0);
             let result = a.borrow()._vals.iter().map(|a| a * scalar).collect();
-            let result = CalcNodeShared::filled_from_shape(a.shape(), result);
+            let result = CalcNode::filled_from_shape(a.shape(), result);
             result.borrow_mut()._parent_nodes = Some(vec![a.clone(), b.clone()]);
             result.borrow_mut()._back_propagation = Some(Box::new(|child| {
                 if let Some(parents) = &child.borrow()._parent_nodes {
@@ -161,7 +161,7 @@ impl Mul for &CalcNodeShared {
                     lhs_row.zip(rhs_col).map(|(&r, &c)| r * c).sum()
                 })
                 .collect();
-            let result = CalcNodeShared::filled_from_shape((m, p), result);
+            let result = CalcNode::filled_from_shape((m, p), result);
             result.borrow_mut()._parent_nodes = Some(vec![self.clone(), b.clone()]);
             result.borrow_mut()._back_propagation = Some(Box::new(|child| {
                 if let Some(parents) = &child.borrow()._parent_nodes {
@@ -202,40 +202,40 @@ impl Mul for &CalcNodeShared {
     }
 }
 
-impl Sub for &CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Sub for &CalcNode {
+    type Output = CalcNode;
 
     fn sub(self, rhs: Self) -> Self::Output {
         self + (-rhs)
     }
 }
 
-impl Sub<CalcNodeShared> for &CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Sub<CalcNode> for &CalcNode {
+    type Output = CalcNode;
 
-    fn sub(self, rhs: CalcNodeShared) -> Self::Output {
+    fn sub(self, rhs: CalcNode) -> Self::Output {
         self - &rhs
     }
 }
 
-impl Sub for CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Sub for CalcNode {
+    type Output = CalcNode;
 
     fn sub(self, rhs: Self) -> Self::Output {
         &self - &rhs
     }
 }
 
-impl Sub<&CalcNodeShared> for CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Sub<&CalcNode> for CalcNode {
+    type Output = CalcNode;
 
     fn sub(self, rhs: &Self) -> Self::Output {
         &self - rhs
     }
 }
 
-impl Div for &CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Div for &CalcNode {
+    type Output = CalcNode;
 
     #[allow(clippy::suspicious_arithmetic_impl)]
     fn div(self, rhs: Self) -> Self::Output {
@@ -243,55 +243,55 @@ impl Div for &CalcNodeShared {
     }
 }
 
-impl Div for CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Div for CalcNode {
+    type Output = CalcNode;
 
     fn div(self, rhs: Self) -> Self::Output {
         &self / &rhs
     }
 }
 
-impl Div<CalcNodeShared> for &CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Div<CalcNode> for &CalcNode {
+    type Output = CalcNode;
 
-    fn div(self, rhs: CalcNodeShared) -> Self::Output {
+    fn div(self, rhs: CalcNode) -> Self::Output {
         self / &rhs
     }
 }
 
-impl Div<&CalcNodeShared> for CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Div<&CalcNode> for CalcNode {
+    type Output = CalcNode;
 
     fn div(self, rhs: &Self) -> Self::Output {
         &self / rhs
     }
 }
 
-impl Neg for CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Neg for CalcNode {
+    type Output = CalcNode;
 
     fn neg(self) -> Self::Output {
         -&self
     }
 }
 
-impl Neg for &CalcNodeShared {
-    type Output = CalcNodeShared;
+impl Neg for &CalcNode {
+    type Output = CalcNode;
 
     fn neg(self) -> Self::Output {
-        self * CalcNodeShared::new_scalar(-1.)
+        self * CalcNode::new_scalar(-1.)
     }
 }
 
 // Invert
-impl CalcNodeShared {
-    pub fn inv(&self) -> CalcNodeShared {
+impl CalcNode {
+    pub fn inv(&self) -> CalcNode {
         self.pow(&Self::new_scalar(-1.))
     }
 }
 // Exponentiate
-impl CalcNodeShared {
-    pub fn exp(&self) -> CalcNodeShared {
+impl CalcNode {
+    pub fn exp(&self) -> CalcNode {
         let result = Self::filled_from_shape(
             self.borrow()._shape,
             self.borrow()._vals.iter().map(|v| v.exp()).collect(),
@@ -310,8 +310,8 @@ impl CalcNodeShared {
 }
 
 // Log
-impl CalcNodeShared {
-    pub fn log(&self) -> CalcNodeShared {
+impl CalcNode {
+    pub fn log(&self) -> CalcNode {
         let result = Self::filled_from_shape(
             self.borrow()._shape,
             self.borrow()._vals.iter().map(|v| v.ln()).collect(),
@@ -331,8 +331,8 @@ impl CalcNodeShared {
 }
 
 // Pow
-impl CalcNodeShared {
-    pub fn pow(&self, power: &CalcNodeShared) -> CalcNodeShared {
+impl CalcNode {
+    pub fn pow(&self, power: &CalcNode) -> CalcNode {
         assert!(power.len() == 1);
         let p = power.value_indexed(0);
         let result = Self::filled_from_shape(
@@ -360,10 +360,10 @@ impl CalcNodeShared {
     }
 }
 
-impl CalcNodeShared {
-    pub fn element_wise_mul(&self, other: &Self) -> CalcNodeShared {
+impl CalcNode {
+    pub fn element_wise_mul(&self, other: &Self) -> CalcNode {
         let result = self.borrow()._vals.iter().zip(other.borrow()._vals.iter()).map(|(a,b)| a * b).collect();
-        let result = CalcNodeShared::filled_from_shape(self.shape(), result);
+        let result = CalcNode::filled_from_shape(self.shape(), result);
         result.borrow_mut()._parent_nodes = Some(vec![self.clone(), other.clone()]);
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
             if let Some(parents) = &child.borrow()._parent_nodes {
@@ -376,7 +376,7 @@ impl CalcNodeShared {
         result
     }
     
-    pub fn element_wise_div(&self, other: &Self) -> CalcNodeShared {
+    pub fn element_wise_div(&self, other: &Self) -> CalcNode {
         self.element_wise_mul(&other.inv())
     }
 }
@@ -388,9 +388,9 @@ mod tests {
 
     #[test]
     fn addition_of_two_scalars() {
-        let inp1 = CalcNodeShared::new_scalar(1.);
-        let inp2 = CalcNodeShared::new_scalar(2.);
-        let out = &inp1 + &inp2;
+        let inp1 = CalcNode::new_scalar(1.);
+        let inp2 = CalcNode::new_scalar(2.);
+        let mut out = &inp1 + &inp2;
         assert_eq!(out.value_indexed(0), 3.);
         out.back_propagation();
         assert_eq!(out.gradient_indexed(0), 1.);
@@ -400,8 +400,8 @@ mod tests {
 
     #[test]
     fn addition_of_scalar_to_itself() {
-        let inp = CalcNodeShared::new_scalar(1.);
-        let out = &inp + &inp;
+        let inp = CalcNode::new_scalar(1.);
+        let mut out = &inp + &inp;
         assert_eq!(out.value_indexed(0), 2.);
         out.back_propagation();
         assert_eq!(out.gradient_indexed(0), 1.);
@@ -410,12 +410,12 @@ mod tests {
 
     #[test]
     fn addition_of_vector_and_scalar() {
-        let inp1 = CalcNodeShared::new_col_vector(vec![1., 2.]);
-        let inp2 = CalcNodeShared::new_scalar(3.);
+        let inp1 = CalcNode::new_col_vector(vec![1., 2.]);
+        let inp2 = CalcNode::new_scalar(3.);
         let expected_value = &[4., 5.];
         let expected_derivative1 = &[1., 1.];
         let expected_derivative2 = &[1.];
-        let out = &inp1 + &inp2;
+        let mut out = &inp1 + &inp2;
         assert_eq!(out.copy_vals(), expected_value);
         out.back_propagation();
         assert_eq!(out.copy_grad(), &[1., 1.]);
@@ -425,12 +425,12 @@ mod tests {
 
     #[test]
     fn addition_of_two_vectors() {
-        let inp1 = CalcNodeShared::new_col_vector(vec![1., 2.]);
-        let inp2 = CalcNodeShared::new_col_vector(vec![3., 4.]);
+        let inp1 = CalcNode::new_col_vector(vec![1., 2.]);
+        let inp2 = CalcNode::new_col_vector(vec![3., 4.]);
         let expected_value = &[4., 6.];
         let expected_derivative1 = &[1., 1.];
         let expected_derivative2 = &[1., 1.];
-        let out = &inp1 + &inp2;
+        let mut out = &inp1 + &inp2;
         assert_eq!(out.copy_vals(), expected_value);
         out.back_propagation();
         assert_eq!(out.copy_grad(), &[1., 1.]);
@@ -440,12 +440,12 @@ mod tests {
 
     #[test]
     fn multiplication_of_vector_and_scalar() {
-        let inp1 = CalcNodeShared::new_col_vector(vec![1., 2.]);
-        let inp2 = CalcNodeShared::new_scalar(3.);
+        let inp1 = CalcNode::new_col_vector(vec![1., 2.]);
+        let inp2 = CalcNode::new_scalar(3.);
         let expected_value = &[3., 6.];
         let expected_derivative1 = &[3., 3.];
         let expected_derivative2 = &[3.];
-        let out = &inp1 * &inp2;
+        let mut out = &inp1 * &inp2;
         assert_eq!(out.copy_vals(), expected_value);
         out.back_propagation();
         assert_eq!(out.copy_grad(), &[1., 1.]);
@@ -455,12 +455,12 @@ mod tests {
 
     #[test]
     fn multiplication_of_two_vectors() {
-        let inp1 = CalcNodeShared::new_row_vector(vec![1., 2.]);
-        let inp2 = CalcNodeShared::new_col_vector(vec![3., 4.]);
+        let inp1 = CalcNode::new_row_vector(vec![1., 2.]);
+        let inp2 = CalcNode::new_col_vector(vec![3., 4.]);
         let expected_value = &[11.];
         let expected_derivative1 = &[3., 4.];
         let expected_derivative2 = &[1., 2.];
-        let out = &inp1 * &inp2;
+        let mut out = &inp1 * &inp2;
         assert_eq!(out.copy_vals(), expected_value);
         out.back_propagation();
         assert_eq!(out.copy_grad(), &[1.]);
@@ -470,12 +470,12 @@ mod tests {
 
     #[test]
     fn matrix_multiplication_with_vector() {
-        let inp1 = CalcNodeShared::filled_from_shape((2, 2), vec![1., 2., 3., 4.]);
-        let inp2 = CalcNodeShared::new_col_vector(vec![5., 6.]);
+        let inp1 = CalcNode::filled_from_shape((2, 2), vec![1., 2., 3., 4.]);
+        let inp2 = CalcNode::new_col_vector(vec![5., 6.]);
         let expected_value = &[17., 39.];
         let expected_derivative1 = &[5., 6., 5., 6.];
         let expected_derivative2 = &[4., 6.];
-        let out = &inp1 * &inp2;
+        let mut out = &inp1 * &inp2;
         assert_eq!(out.copy_vals(), expected_value);
         out.back_propagation();
         assert_eq!(out.copy_grad(), &[1., 1.]);
@@ -485,12 +485,12 @@ mod tests {
 
     #[test]
     fn matrix_multiplication_square_matrices() {
-        let inp1 = CalcNodeShared::filled_from_shape((2, 2), vec![1., 2., 3., 4.]);
-        let inp2 = CalcNodeShared::filled_from_shape((2, 2), vec![5., 6., 7., 8.]);
+        let inp1 = CalcNode::filled_from_shape((2, 2), vec![1., 2., 3., 4.]);
+        let inp2 = CalcNode::filled_from_shape((2, 2), vec![5., 6., 7., 8.]);
         let expected_value = &[19., 22., 43., 50.];
         let expected_derivative1 = &[11., 15., 11., 15.];
         let expected_derivative2 = &[4., 4., 6., 6.];
-        let out = &inp1 * &inp2;
+        let mut out = &inp1 * &inp2;
         assert_eq!(out.copy_vals(), expected_value);
         out.back_propagation();
         assert_eq!(out.copy_grad(), &[1., 1., 1., 1.]);
@@ -500,12 +500,12 @@ mod tests {
 
     #[test]
     fn matrix_multiplication_non_square_matrices() {
-        let inp1 = CalcNodeShared::filled_from_shape((2, 3), vec![1., 2., 3., 4., 5., 6.]);
-        let inp2 = CalcNodeShared::filled_from_shape((3, 2), vec![7., 8., 9., 10., 11., 12.]);
+        let inp1 = CalcNode::filled_from_shape((2, 3), vec![1., 2., 3., 4., 5., 6.]);
+        let inp2 = CalcNode::filled_from_shape((3, 2), vec![7., 8., 9., 10., 11., 12.]);
         let expected_value = &[58., 64., 139., 154.];
         let expected_derivative1 = &[15., 19., 23., 15., 19., 23.];
         let expected_derivative2 = &[5., 5., 7., 7., 9., 9.];
-        let out = &inp1 * &inp2;
+        let mut out = &inp1 * &inp2;
         assert_eq!(out.copy_vals(), expected_value);
         out.back_propagation();
         assert_eq!(out.copy_grad(), &[1., 1., 1., 1.]);

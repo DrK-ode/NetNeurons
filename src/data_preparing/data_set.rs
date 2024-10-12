@@ -1,6 +1,6 @@
 use std::fs;
 
-use crate::nnetwork::{CalcNodeShared, FloatType, NodeType, VecOrientation};
+use crate::nnetwork::{CalcNode, FloatType, NodeType, VecOrientation};
 
 #[derive(Debug, PartialEq)]
 pub enum DataSetError {
@@ -22,16 +22,11 @@ impl DataSet {
         let data = Self::get_string_from_file(path, lowercase);
         let mut training_data = Vec::new();
         let mut validation_data = Vec::new();
-        let mut n_newlines = (data.lines().count() as f32 * training_ratio) as usize - 1;
-        for line in data.lines() {
-            if n_newlines > 0 {
-                training_data.push(line.to_string());
-                n_newlines -= 1;
-            } else {
-                validation_data.push(line.to_string());
-            }
-        }
-
+        let n_training = (data.lines().count() as f32 * training_ratio) as usize - 1;
+        
+        data.lines().take(n_training).for_each(|line| training_data.push(line.to_string()));
+        data.lines().skip(n_training).for_each(|line| validation_data.push(line.to_string()));
+        
         let mut chars = Vec::new();
         data.chars().for_each(|c: char| {
             if c.is_ascii_alphabetic() && !chars.contains(&c) {
@@ -82,7 +77,7 @@ impl DataSet {
         self._chars.len()
     }
 
-    pub fn decode(&self, vector: &CalcNodeShared) -> Result<char, DataSetError> {
+    pub fn decode(&self, vector: &CalcNode) -> Result<char, DataSetError> {
         if vector.node_type() != NodeType::Vector(VecOrientation::Column) {
             panic!("Can only decode column vectors.");
         }
@@ -103,11 +98,11 @@ impl DataSet {
         .copied()
     }
 
-    pub fn decode_string(&self, v: &[&CalcNodeShared]) -> Result<String, DataSetError> {
+    pub fn decode_string(&self, v: &[&CalcNode]) -> Result<String, DataSetError> {
         v.iter().map(|v| self.decode(v)).collect()
     }
 
-    pub fn encode(&self, s: &str) -> Result<CalcNodeShared, DataSetError> {
+    pub fn encode(&self, s: &str) -> Result<CalcNode, DataSetError> {
         let n_rows = self._chars.len();
         let n_cols = s.len();
         let mut out_vec = vec![0.; n_rows * n_cols];
@@ -118,7 +113,7 @@ impl DataSet {
                 return Err(DataSetError::Encoding(ch));
             }
         }
-        Ok( CalcNodeShared::filled_from_shape((n_rows,n_cols), out_vec ) )
+        Ok( CalcNode::filled_from_shape((n_rows,n_cols), out_vec ) )
     }
 }
 

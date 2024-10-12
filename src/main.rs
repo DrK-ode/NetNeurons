@@ -22,7 +22,6 @@ fn main() {
 
     let mut retext = ReText::new(
         data,
-        //training_batch_size,
         block_size,
         embed_dim,
         n_hidden_layers,
@@ -31,7 +30,7 @@ fn main() {
     );
     let text_no_training = retext.predict(prediction_seed, prediction_length).unwrap();
 
-    match ParameterBundle::import_parameters("names.param") {
+    match ParameterBundle::new_from_file("names.param") {
         Ok(bundle) => {
             retext.load_trainer_parameter_bundle(&bundle);
         }
@@ -80,7 +79,6 @@ fn plot_embedding(retext: &ReText) -> Result<(), Box<dyn std::error::Error>> {
         };
         let letter = letter.to_string();
         let coords = retext.embed(&letter).copy_vals();
-        //println!("{letter} -> {:?}", coords);
         let empty = EmptyElement::at((coords[0], coords[1]));
         let circle = Circle::new((0, 0), 2, color);
         let text = Text::new(letter, (5, 5), &font);

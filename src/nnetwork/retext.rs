@@ -6,7 +6,7 @@ use crate::{
     nnetwork::{FunctionLayer, LinearLayer, Parameters, ReshapeLayer},
 };
 
-use super::{CalcNodeShared, FloatType, Layer, MultiLayer, ParameterBundle};
+use super::{mlp::loss_functions::neg_log_likelihood, CalcNode, FloatType, Layer, MultiLayer, ParameterBundle};
 
 pub struct ReText {
     _dataset: DataSet,
@@ -89,7 +89,7 @@ impl ReText {
             Self::create_layers(n_chars, block_size, embed_dim, n_hidden_layers, layer_dim);
         let mut mlp = MultiLayer::new(layers);
         mlp.set_regularization(regularization);
-        mlp.set_loss_function(&MultiLayer::neg_log_likelihood);
+        mlp.set_loss_function(&neg_log_likelihood);
         ReText {
             _dataset: data,
             _block_size: block_size,
@@ -122,7 +122,7 @@ impl ReText {
                 let width = (cycles as f64).log10() as usize + 1;
                 println!(
                     "Cycle #{n: >width$}: [ loss: {:.3e}, duration: {} µs ]",
-                    loss.value_indexed(0),
+                    loss,
                     timer.elapsed().as_micros()
                 );
             }
@@ -137,7 +137,7 @@ impl ReText {
         println!("Validation loss: {}", validation);
     }
 
-    pub fn embed(&self, inp: &str) -> CalcNodeShared {
+    pub fn embed(&self, inp: &str) -> CalcNode {
         let inp = self._dataset.encode(inp).unwrap();
         if !self._embedding {
             return inp.clone();
@@ -145,7 +145,7 @@ impl ReText {
         self._mlp.get_layer(0).forward(&inp)
     }
 
-    fn get_correlations_from_str(&self, line: &str) -> Vec<(CalcNodeShared, CalcNodeShared)> {
+    fn get_correlations_from_str(&self, line: &str) -> Vec<(CalcNode, CalcNode)> {
         let pad = "^".to_string().repeat(self._block_size);
         let s = "".to_string() + &pad + line + "^";
         s.char_indices()
@@ -170,7 +170,7 @@ impl ReText {
         &self,
         data: &[String],
         n: usize,
-    ) -> Vec<(CalcNodeShared, CalcNodeShared)> {
+    ) -> Vec<(CalcNode, CalcNode)> {
         let n_lines = data.len();
         let mut correlations = Vec::new();
         let start_idx = rand::thread_rng().gen_range(0..n_lines);

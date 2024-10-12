@@ -1,19 +1,19 @@
 use std::{cell::RefCell, collections::HashSet};
 
-use super::{CalcNode, CalcNodeShared, FloatType};
+use super::{CalcNode, CalcNodeCore, FloatType};
 
-impl CalcNodeShared{
-    pub fn back_propagation(&self) {
-        // Returns a sorted list of CalcNodeShared
-        fn topo_sort(root: &CalcNodeShared) -> Vec<CalcNodeShared> {
-            // This is were the magic happens
+impl CalcNode {
+    pub fn back_propagation(&mut self) {
+        // Returns a sorted list of CalcNodes
+        fn topo_sort(root: &CalcNode) -> Vec<CalcNode> {
+            // Recursive function that does the actual sorting
             fn topo_sort_recursive(
-                node: &CalcNodeShared,
+                node: &CalcNode,
                 visited: &mut HashSet<usize>,
-                out: &mut Vec<CalcNodeShared>,
+                out: &mut Vec<CalcNode>,
             ) {
-                fn ptr_as_usize(node: &CalcNodeShared) -> usize {
-                    (node.as_ptr() as *const CalcNode) as usize
+                fn ptr_as_usize(node: &CalcNode) -> usize {
+                    (node.as_ptr() as *const CalcNodeCore) as usize
                 }
                 if !visited.contains(&ptr_as_usize(node)) {
                     visited.insert(ptr_as_usize(node));
@@ -27,12 +27,13 @@ impl CalcNodeShared{
             }
             // These container will be sent down the recursive calls
             let mut visited: HashSet<usize> = HashSet::new();
-            let mut sorted: Vec<CalcNodeShared> = Vec::new();
+            let mut sorted: Vec<CalcNode> = Vec::new();
             // Finds all parents (and their parents) and adds them to the vector before adding the root
             topo_sort_recursive(root, &mut visited, &mut sorted);
             sorted
         }
-        // The end result will be at the end of the vector
+
+        // The final result will be at the end of the vector
         let sorted = topo_sort(self);
         // Initialise all gradients to zero
         sorted
@@ -40,7 +41,7 @@ impl CalcNodeShared{
             .for_each(|node| node.borrow_mut()._grad.iter_mut().for_each(|g| *g = 0.));
         // Initialise the root gradient to unity
         self.borrow_mut()._grad.iter_mut().for_each(|g| *g = 1.);
-        // Calculate all other gradients backwards
+        // Back propagate all other gradients
         sorted.iter().rev().for_each(|node| {
             // The original nodes will not have a differentiation function
             if let Some(f) = &node.borrow()._back_propagation {
@@ -48,9 +49,11 @@ impl CalcNodeShared{
             }
         });
     }
-    
-    pub fn decend_grad(&self, learning_rate: FloatType){
-        let mut tmp = RefCell::new(CalcNode::default());
+
+    // Adjusts values based on a constant learning rate and a previously calculated gradient
+    pub fn decend_grad(&mut self, learning_rate: FloatType) {
+        let mut tmp = RefCell::new(CalcNodeCore::default());
+        // Bring the node outside the RefCell since we need to borrow both values and gradients at the same time
         self.swap(&tmp);
         let t = tmp.get_mut();
         t._vals
