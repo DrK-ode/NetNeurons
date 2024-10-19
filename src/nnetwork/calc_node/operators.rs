@@ -197,7 +197,7 @@ impl Mul for &CalcNode {
             }));
             result
         } else {
-            panic!("Invalid operands for multiplication.");
+            panic!("Invalid operands for multiplication. {} {}", self, other);
         }
     }
 }

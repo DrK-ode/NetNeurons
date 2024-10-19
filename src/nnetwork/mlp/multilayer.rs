@@ -4,7 +4,7 @@ use rand::Rng;
 
 use crate::nnetwork::{calc_node::FloatType, CalcNode, Layer, Parameters};
 
-use super::{loss_functions::neg_log_likelihood, parameter_bundle::ParameterBundle};
+use super::loss_functions::neg_log_likelihood;
 
 pub type LossFuncType = dyn Fn(&CalcNode, &CalcNode) -> CalcNode;
 
@@ -102,14 +102,6 @@ impl MultiLayer {
     fn decend_grad(&mut self, learning_rate: FloatType) {
         self.param_iter_mut()
             .for_each(|p| p.decend_grad(learning_rate));
-    }
-
-    pub fn load_parameter_bundle(&mut self, bundle: &ParameterBundle) {
-        bundle.load_parameters_into(&mut self._layers)
-    }
-
-    pub fn get_parameter_bundle(&self) -> ParameterBundle {
-        ParameterBundle::new_from_layers(&self._layers)
     }
 }
 

@@ -10,14 +10,14 @@ pub enum DataSetError {
     Creation,
 }
 
-pub struct DataSet {
+pub struct CharSet {
     _data: String,
     _chars: Vec<char>,
     _training_data: Vec<String>,
     _validation_data: Vec<String>,
 }
 
-impl DataSet {
+impl CharSet {
     pub fn new(path: &str, training_ratio: f32, lowercase: bool) -> Self {
         let data = Self::get_string_from_file(path, lowercase);
         let mut training_data = Vec::new();
@@ -35,7 +35,7 @@ impl DataSet {
         });
         chars.sort();
 
-        DataSet {
+        CharSet {
             _data: data,
             _chars: chars,
             _training_data: training_data,
@@ -77,7 +77,7 @@ impl DataSet {
         self._chars.len()
     }
 
-    pub fn decode(&self, vector: &CalcNode) -> Result<char, DataSetError> {
+    pub fn decode_char(&self, vector: &CalcNode) -> Result<char, DataSetError> {
         if vector.node_type() != NodeType::Vector(VecOrientation::Column) {
             panic!("Can only decode column vectors.");
         }
@@ -99,7 +99,7 @@ impl DataSet {
     }
 
     pub fn decode_string(&self, v: &[&CalcNode]) -> Result<String, DataSetError> {
-        v.iter().map(|v| self.decode(v)).collect()
+        v.iter().map(|v| self.decode_char(v)).collect()
     }
 
     pub fn encode(&self, s: &str) -> Result<CalcNode, DataSetError> {
@@ -124,19 +124,19 @@ mod tests {
     #[test]
     #[should_panic]
     fn wrong_path() {
-        DataSet::new("no dataset here", 0.9, false);
+        CharSet::new("no dataset here", 0.9, false);
     }
 
     #[test]
     fn reading_all_shakespeare() {
-        let ds = DataSet::new("./datasets/tiny_shakespeare.txt", 1., false);
+        let ds = CharSet::new("./datasets/tiny_shakespeare.txt", 1., false);
         assert!(ds._data.starts_with("First Citizen:"));
         assert!(ds._data.ends_with("Whiles thou art waking.\n"));
     }
 
     #[test]
     fn finding_all_characters_in_shakespeare() {
-        let ds = DataSet::new("./datasets/tiny_shakespeare.txt", 1., true);
+        let ds = CharSet::new("./datasets/tiny_shakespeare.txt", 1., true);
         assert_eq!(ds.number_of_chars(), 26);
     }
 }
