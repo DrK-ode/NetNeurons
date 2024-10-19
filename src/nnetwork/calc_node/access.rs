@@ -159,4 +159,14 @@ impl CalcNode {
         assert_eq!(grad.len(), self.borrow()._grad.len());
         self.borrow_mut()._grad = grad.to_vec();
     }
+    
+    pub fn set_value_indexed(&mut self, i:usize, val: FloatType) {
+        assert!( i < self.len());
+        self.borrow_mut()._vals[i] = val;
+    }
+    
+    pub fn set_gradient_indexed(&mut self, i:usize, val: FloatType) {
+        assert!( i < self.len());
+        self.borrow_mut()._grad[i] = val;
+    }
 }

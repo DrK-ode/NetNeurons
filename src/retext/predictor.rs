@@ -17,7 +17,6 @@ pub struct ReText {
     _dataset: CharSet,
     _mlp: MultiLayer,
     _block_size: usize,
-    _embedding: bool,
 }
 
 impl ReText {
@@ -100,7 +99,6 @@ impl ReText {
             _dataset: data,
             _block_size: block_size,
             _mlp: mlp,
-            _embedding: embed_dim.is_some(),
         }
     }
 
