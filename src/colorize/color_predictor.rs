@@ -1,9 +1,15 @@
-use std::{cmp::Ordering, ops::Range, time::Instant};
 use rand_distr::{Distribution, Uniform};
+use std::{cmp::Ordering, ops::Range, time::Instant};
 
-use crate::nnetwork::{loss_functions::least_squares, CalcNode, FloatType, FunctionLayer, Layer, LinearLayer, MultiLayer, Parameters};
+use crate::nnetwork::{
+    loss_functions::least_squares, CalcNode, FloatType, FunctionLayer, Layer, LinearLayer,
+    MultiLayer, Parameters,
+};
 
-use super::{color_key::{Color, ColorFunction}, ColorKey};
+use super::{
+    color_key::{Color, ColorFunction},
+    ColorKey,
+};
 
 pub struct ColorPredictor {
     _color_key: ColorKey,
@@ -70,7 +76,7 @@ impl ColorPredictor {
 
     pub fn predict(&self, coords: (FloatType, FloatType)) -> Color {
         let coords = CalcNode::new_col_vector(vec![coords.0, coords.1]);
-        let (max_index,_max_value) = self
+        let (max_index, _max_value) = self
             ._mlp
             .forward(&coords)
             .copy_vals()
@@ -84,35 +90,53 @@ impl ColorPredictor {
                 } else {
                     Ordering::Equal
                 }
-            }).unwrap();
+            })
+            .unwrap();
         Color::from(max_index)
     }
-    
-    fn calc_correlations(&self, batch_size:usize, x_range: &Range<FloatType>, y_range: &Range<FloatType>) -> Vec<(CalcNode,CalcNode)>{
+
+    fn calc_correlations(
+        &self,
+        batch_size: usize,
+        x_range: &Range<FloatType>,
+        y_range: &Range<FloatType>,
+    ) -> Vec<(CalcNode, CalcNode)> {
         let mut rng = rand::thread_rng();
         let x_dist = Uniform::from(x_range.clone());
         let y_dist = Uniform::from(y_range.clone());
-        (0..batch_size).map(|_| {
-            let coords = (x_dist.sample(&mut rng), y_dist.sample(&mut rng));
-            let mut color = CalcNode::filled_from_shape((1,4),vec![0.;4]);
-            color.set_value_indexed(self._color_key.color(coords).into(),1.);
-            (CalcNode::new_col_vector(vec![coords.0,coords.1]),color)
-        }).collect()
+        (0..batch_size)
+            .map(|_| {
+                let coords = (x_dist.sample(&mut rng), y_dist.sample(&mut rng));
+                let mut color = CalcNode::filled_from_shape((1, 4), vec![0.; 4]);
+                color.set_value_indexed(self._color_key.color(coords).into(), 1.);
+                (CalcNode::new_col_vector(vec![coords.0, coords.1]), color)
+            })
+            .collect()
     }
-    
-    pub fn train(&mut self, cycles:usize,batch_size:usize,learning_rate: FloatType, x_range: &Range<FloatType>, y_range: &Range<FloatType>, verbose: bool) -> FloatType {
+
+    pub fn train(
+        &mut self,
+        cycles: usize,
+        batch_size: usize,
+        learning_rate: Range<FloatType>,
+        x_range: &Range<FloatType>,
+        y_range: &Range<FloatType>,
+        verbose: bool,
+    ) -> FloatType {
         let timer = Instant::now();
         let mut loss = 0.;
+        let learning_rate_log_step = (learning_rate.end.ln() - learning_rate.start.ln()) / (cycles-1) as FloatType;
         for n in 0..cycles {
-            let correlations = self.calc_correlations(batch_size,x_range,y_range);
+            let correlations = self.calc_correlations(batch_size, x_range, y_range);
             let timer = Instant::now();
+            let learning_rate = (learning_rate.start.ln() + learning_rate_log_step * n as FloatType).exp();
             loss = self._mlp.train(&correlations, learning_rate);
 
             // Provide some per cycle stats
             if verbose {
                 let width = (cycles as f64).log10() as usize + 1;
                 println!(
-                    "Cycle #{n: >width$}: [ loss: {:.3e}, duration: {} µs ]",
+                    "Cycle #{n: >width$}, learning_rate: {learning_rate:.2e} [ loss: {:.3e}, duration: {} µs ]",
                     loss,
                     timer.elapsed().as_micros()
                 );

@@ -1,4 +1,4 @@
-use std::{fmt::Display, time::Instant};
+use std::fmt::Display;
 
 use rand::Rng;
 
@@ -80,14 +80,12 @@ impl MultiLayer {
     }
 
     pub fn loss(&self, inp: &[(CalcNode, CalcNode)]) -> CalcNode {
-        let timer = Instant::now();
         let loss = inp
             .iter()
             .map(|(inp, truth)| (self._loss_func)(&self.forward(inp), truth))
             .sum::<CalcNode>()
             * CalcNode::new_scalar(1. / inp.len() as FloatType);
         let reg = self.calc_regularization();
-        println!("Calculating loss took {} µs", timer.elapsed().as_micros());
         loss + reg
     }
 
