@@ -1,8 +1,6 @@
 use rand::Rng;
-use std::fs::read_to_string;
 use std::io::Error;
-use std::io::Write;
-use std::{fs::File, time::Instant};
+use std::time::Instant;
 
 use crate::{
     retext::char_set::{CharSet, DataSetError},
@@ -213,71 +211,11 @@ impl ReText {
         self._dataset.characters()
     }
 
-    // Adds a numerical suffix if the wanted filename is taken. The filename is returned upon successful export.
     pub fn export_parameters(&self, filename: &str) -> std::io::Result<String> {
-        let mut fn_string = filename.to_string();
-        let mut counter: usize = 0;
-        let mut file = loop {
-            let file = File::create_new(&fn_string);
-            match file {
-                Ok(file) => {
-                    if counter > 0 {
-                        eprintln!("Changing export filename to; {fn_string}");
-                    }
-                    break file;
-                }
-                Err(err) => match err.kind() {
-                    std::io::ErrorKind::AlreadyExists => (),
-                    _ => {
-                        eprintln!("Export parameters failed: {}", err)
-                    }
-                },
-            }
-            fn_string = filename.to_string() + "." + &counter.to_string();
-            counter += 1;
-        };
-        for (n, param) in self._mlp.param_iter().enumerate() {
-            writeln!(file, "Parameter: {n}")?;
-            for i in 0..param.len() {
-                writeln!(file, "{}", param.value_indexed(i))?;
-            }
-        }
-        Ok(fn_string)
+        self._mlp.export_parameters(filename)
     }
 
     pub fn import_parameters(&mut self, filename: &str) -> Result<(), Error> {
-        let mut param_vals: Vec<FloatType> = Vec::new();
-        let file_content = read_to_string(filename);
-        match file_content {
-            Ok(content) => {
-                let mut imported_parameters = 0;
-                let target_parameters = self._mlp.param_iter().count();
-                let mut target_iter = self._mlp.param_iter_mut();
-                for line in content.lines() {
-                    if line.starts_with("Parameter") {
-                        if !param_vals.is_empty() {
-                            if let Some(target) = target_iter.next() {
-                                imported_parameters += 1;
-                                assert_eq!(
-                                    target.len(),
-                                    param_vals.len(),
-                                    "Wrong size of parameter {} from file.",
-                                    imported_parameters
-                                );
-                                target.set_vals(&param_vals);
-                            }
-                            param_vals.clear();
-                        }
-                    } else {
-                        param_vals.push(line.parse().unwrap())
-                    }
-                }
-                if imported_parameters < target_parameters {
-                    eprintln!("Parameter file contained too few parameters, only the first {imported_parameters} were set.");
-                }
-                Ok(())
-            }
-            Err(err) => Err(err),
-        }
+        self._mlp.import_parameters(filename)
     }
 }
