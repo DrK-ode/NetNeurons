@@ -1,4 +1,7 @@
-use std::{fmt::Display, iter::{self, empty}};
+use std::{
+    fmt::Display,
+    iter::{self, empty},
+};
 
 use crate::nnetwork::{CalcNode, NodeShape};
 
@@ -111,7 +114,6 @@ impl Display for ReshapeLayer {
 impl Parameters for ReshapeLayer {
     fn param_iter(&self) -> Box<dyn Iterator<Item = &CalcNode> + '_> {
         Box::new(empty())
-        
     }
 
     fn param_iter_mut(&mut self) -> Box<dyn Iterator<Item = &mut CalcNode> + '_> {
@@ -152,17 +154,67 @@ impl FunctionLayer {
     }
 
     pub fn sigmoid(inp: &CalcNode) -> CalcNode {
-        (CalcNode::filled_from_shape(inp.shape(), vec![1.; inp.len()]) + (-inp).exp())
-            .pow(&CalcNode::new_scalar(-1.))
+        CalcNode::new(
+            inp.shape(),
+            inp.borrow()
+                .vals()
+                .iter()
+                .map(|x| 1. / (1. + (-x).exp()))
+                .collect(),
+            vec![inp.clone()],
+            Some(Box::new(|child: CalcNode| {
+                child.copy_parents()[0].add_grad(
+                    &child
+                        .borrow()
+                        .vals()
+                        .iter()
+                        .zip(child.borrow().grad().iter())
+                        .map(|(&x, &g)| x * (1. - x) * g)
+                        .collect::<Vec<_>>(),
+                );
+            })),
+        )
     }
 
-    pub fn tanh(inp: &CalcNode) -> CalcNode {
+    // Old implementation, at least three times slower
+    /*pub fn tanh(inp: &CalcNode) -> CalcNode {
         let one = CalcNode::new_scalar(1.);
         let a = -inp;
         let b = a * CalcNode::new_scalar(2.);
         let exp2 = b.exp();
-        //let exp2 = (-inp * CalcNodeShared::new_scalar(2.)).exp();
         (&one - &exp2).element_wise_div(&(&one + &exp2))
+    }*/
+
+    // New direct implementation
+    pub fn tanh(inp: &CalcNode) -> CalcNode {
+        CalcNode::new(
+            inp.shape(),
+            inp.borrow().vals().iter().map(|x| x.tanh()).collect(),
+            vec![inp.clone()],
+            Some(Box::new(|child: CalcNode| {
+                child.copy_parents()[0].add_grad(
+                    &child
+                        .borrow()
+                        .vals()
+                        .iter()
+                        .zip(child.borrow().grad().iter())
+                        .map(|(&x, &g)| (1. - x * x) * g)
+                        .collect::<Vec<_>>(),
+                );
+            })),
+        )
+    }
+
+    pub fn leaky_relu(inp: &CalcNode) -> CalcNode {
+        CalcNode::filled_from_shape(
+            inp.shape(),
+            inp.borrow()
+                .vals()
+                .iter()
+                .map(|&v| if v > 0. { 1. } else { 0.01 })
+                .collect(),
+        )
+        .element_wise_mul(inp)
     }
 
     pub fn softmax(inp: &CalcNode) -> CalcNode {
