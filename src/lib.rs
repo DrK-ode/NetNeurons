@@ -1,3 +1,3 @@
 pub mod nnetwork;
 pub mod retext;
-pub mod colorize;
+pub mod color_selector;

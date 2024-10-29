@@ -13,4 +13,4 @@ rand_distr = "0.4.3"
 name="retexter"
 
 [[bin]]
-name="colorizer"
+name="rgbvenner"
