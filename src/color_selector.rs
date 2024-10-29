@@ -19,7 +19,8 @@ impl ColorSelector {
         const BIASED_LAYERS: bool = true;
         const INPUT_DIM: usize = 2;
         const OUTPUT_DIM: usize = 3;
-        let non_linearity = FunctionLayer::new(&FunctionLayer::sigmoid, "Sigmoid", "Non-linearity layer");
+        let non_linearity =
+            FunctionLayer::new(&FunctionLayer::sigmoid, "Sigmoid", "Non-linearity layer");
         // ReLU has major problems with convergence and a tendancy till zero out the whole network with the scheme used here.
         //let non_linearity = FunctionLayer::new(&FunctionLayer::leaky_relu, "Leaky ReLU", "Non-linearity layer");
         let mut layers: Vec<Box<dyn Layer>> = Vec::new();
@@ -120,8 +121,11 @@ impl ColorSelector {
         let timer = Instant::now();
         let mut training_points = Vec::new();
         let mut loss = 0.;
-        let learning_rate_log_step =
-            (learning_rate.end.ln() - learning_rate.start.ln()) / (cycles - 1) as FloatType;
+        let learning_rate_log_step = if cycles < 2 {
+            learning_rate.start
+        } else {
+            (learning_rate.end.ln() - learning_rate.start.ln()) / (cycles - 1) as FloatType
+        };
         for n in 0..cycles {
             let correlations = self.calc_correlations(batch_size, x_range, y_range);
             let timer = Instant::now();

@@ -35,7 +35,7 @@ fn main() {
         },
     }
 
-    let training_cycles = 100000; // TODO: Breaks if less than 2
+    let training_cycles = 100000;
     let batch_size = 100;
     let learning_rate = 0.1..0.01; // Logspaced
     let x_range = -1. ..1.;
