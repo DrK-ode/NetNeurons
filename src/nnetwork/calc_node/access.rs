@@ -9,6 +9,15 @@ impl CalcNodeCore {
     pub fn grad(&self) -> &[FloatType] {
         &self._grad
     }
+    pub fn parents(&self) -> &Option<Vec<CalcNode>>{
+        &self._parent_nodes
+    }
+    pub fn back_propagation(&self) -> &Option<Box<dyn Fn(CalcNode)>>{
+        &self._back_propagation
+    }
+    pub fn shape(&self) -> &NodeShape {
+        &self._shape
+    }
 }
 
 impl Deref for CalcNode {
@@ -155,6 +164,12 @@ impl CalcNode {
         self.borrow_mut()._vals = vals.to_vec();
     }
 
+    pub fn add_grad(&mut self, grad: &[FloatType]) {
+        assert_eq!(grad.len(), self.borrow()._grad.len());
+        self.borrow_mut()._grad.iter_mut().zip(grad.iter()).for_each(|(target, &value)| {
+            *target += value});
+    }
+    
     pub fn set_grad(&mut self, grad: &[FloatType]) {
         assert_eq!(grad.len(), self.borrow()._grad.len());
         self.borrow_mut()._grad = grad.to_vec();
