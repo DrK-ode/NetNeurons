@@ -3,7 +3,7 @@ use std::{
     iter::{self, empty},
 };
 
-use crate::nnetwork::{CalcNode, NodeShape};
+use crate::nnetwork::{CalcNode, FloatType, NodeShape};
 
 use crate::nnetwork::Parameters;
 
@@ -153,70 +153,43 @@ impl FunctionLayer {
         }
     }
 
+    // Helper function for implementations of functions b=f(a) that has derivatives that can be expressed as a function of the result, f'(b)
+    fn function_layer_back_propagator(inp: &CalcNode, func: &dyn Fn(FloatType)->FloatType, gfunc: &'static dyn Fn(FloatType)->FloatType ) -> CalcNode {
+        CalcNode::new(
+            inp.shape(),
+            inp.borrow()
+                .vals()
+                .iter()
+                .map(|&x| (func)(x))
+                .collect(),
+            vec![inp.clone()],
+            Some(Box::new(|child: CalcNode| {
+                child.copy_parents()[0].add_grad(
+                    &child
+                        .borrow()
+                        .vals()
+                        .iter()
+                        .zip(child.borrow().grad().iter())
+                        .map(|(&x, &g)| {
+                            (gfunc)(x) * g})
+                        .collect::<Vec<_>>(),
+                );
+            })),
+        )
+    }
+    
     pub fn sigmoid(inp: &CalcNode) -> CalcNode {
-        CalcNode::new(
-            inp.shape(),
-            inp.borrow()
-                .vals()
-                .iter()
-                .map(|x| 1. / (1. + (-x).exp()))
-                .collect(),
-            vec![inp.clone()],
-            Some(Box::new(|child: CalcNode| {
-                child.copy_parents()[0].add_grad(
-                    &child
-                        .borrow()
-                        .vals()
-                        .iter()
-                        .zip(child.borrow().grad().iter())
-                        .map(|(&x, &g)| x * (1. - x) * g)
-                        .collect::<Vec<_>>(),
-                );
-            })),
-        )
+        Self::function_layer_back_propagator(inp, &|x| 1. / (1. + (-x).exp()), &|x| x*(1.-x) )
     }
-
-    // Old implementation, at least three times slower
-    /*pub fn tanh(inp: &CalcNode) -> CalcNode {
-        let one = CalcNode::new_scalar(1.);
-        let a = -inp;
-        let b = a * CalcNode::new_scalar(2.);
-        let exp2 = b.exp();
-        (&one - &exp2).element_wise_div(&(&one + &exp2))
-    }*/
-
-    // New direct implementation
+    
     pub fn tanh(inp: &CalcNode) -> CalcNode {
-        CalcNode::new(
-            inp.shape(),
-            inp.borrow().vals().iter().map(|x| x.tanh()).collect(),
-            vec![inp.clone()],
-            Some(Box::new(|child: CalcNode| {
-                child.copy_parents()[0].add_grad(
-                    &child
-                        .borrow()
-                        .vals()
-                        .iter()
-                        .zip(child.borrow().grad().iter())
-                        .map(|(&x, &g)| (1. - x * x) * g)
-                        .collect::<Vec<_>>(),
-                );
-            })),
-        )
+        Self::function_layer_back_propagator(inp, &|x| x.tanh(), &|x| (1.-x*x) )
     }
-
+    
     pub fn leaky_relu(inp: &CalcNode) -> CalcNode {
-        CalcNode::filled_from_shape(
-            inp.shape(),
-            inp.borrow()
-                .vals()
-                .iter()
-                .map(|&v| if v > 0. { 1. } else { 0.01 })
-                .collect(),
-        )
-        .element_wise_mul(inp)
+        Self::function_layer_back_propagator(inp, &|x| if x > 0. {x} else {0.01*x}, &|x| if x > 0. {1.} else {0.01})
     }
-
+    
     pub fn softmax(inp: &CalcNode) -> CalcNode {
         inp.exp().normalized()
     }
