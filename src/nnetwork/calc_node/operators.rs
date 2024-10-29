@@ -14,10 +14,10 @@ impl Sum for CalcNode {
 impl CalcNode {
     pub fn sum(&self) -> CalcNode {
         let result = Self::new_scalar(self.borrow()._vals.iter().sum());
-        result.borrow_mut()._parent_nodes = Some(vec![self.clone()]);
+        result.borrow_mut()._parent_nodes = vec![self.clone()];
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
             let child_grad = child.gradient_indexed(0);
-            child.copy_parents().unwrap()[0]
+            child.copy_parents()[0]
                 .borrow_mut()
                 ._grad
                 .iter_mut()
@@ -58,8 +58,8 @@ impl Add for &CalcNode {
 
     fn add(self, rhs: Self) -> Self::Output {
         // If self is a scalar make it the RHS
-        let a = if self.len() == 1 {rhs} else {self};
-        let b = if self.len() == 1 {self} else {rhs};
+        let a = if self.len() == 1 { rhs } else { self };
+        let b = if self.len() == 1 { self } else { rhs };
         // Adding scalar
         let result: Vec<_> = if b.len() == 1 {
             let b = b.value_indexed(0);
@@ -74,19 +74,18 @@ impl Add for &CalcNode {
                 .map(|(a, b)| a + b)
                 .collect()
         } else {
-            panic!("Invalid operands for addition.");
+            panic!("Invalid operands for addition {a} and {b}.");
         };
         let result = CalcNode::filled_from_shape(a.shape(), result);
-        result.borrow_mut()._parent_nodes = Some(vec![a.clone(), b.clone()]);
+        result.borrow_mut()._parent_nodes = vec![a.clone(), b.clone()];
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
-            if let Some(parents) = &child.borrow()._parent_nodes {
-                for p in parents {
-                    p.borrow_mut()
-                        ._grad
-                        .iter_mut()
-                        .zip(child.borrow()._grad.iter())
-                        .for_each(|(p, c)| *p += c);
-                }
+            let parents = &child.borrow()._parent_nodes;
+            for p in parents {
+                p.borrow_mut()
+                    ._grad
+                    .iter_mut()
+                    .zip(child.borrow()._grad.iter())
+                    .for_each(|(p, c)| *p += c);
             }
         }));
         result
@@ -122,22 +121,20 @@ impl Mul for &CalcNode {
 
     fn mul(self, other: Self) -> Self::Output {
         // If self is a scalar make it the RHS
-        let a = if self.len() == 1 {other} else {self};
-        let b = if self.len() == 1 {self} else {other};
+        let a = if self.len() == 1 { other } else { self };
+        let b = if self.len() == 1 { self } else { other };
         // Multiplying with scalar
         if b.len() == 1 {
             let scalar = b.value_indexed(0);
             let result = a.borrow()._vals.iter().map(|a| a * scalar).collect();
             let result = CalcNode::filled_from_shape(a.shape(), result);
-            result.borrow_mut()._parent_nodes = Some(vec![a.clone(), b.clone()]);
+            result.borrow_mut()._parent_nodes = vec![a.clone(), b.clone()];
             result.borrow_mut()._back_propagation = Some(Box::new(|child| {
-                if let Some(parents) = &child.borrow()._parent_nodes {
-                    let scalar_val = parents[1].borrow()._vals[0];
-                    for (i, &child_grad) in child.borrow()._grad.iter().enumerate() {
-                        parents[0].borrow_mut()._grad[i] += child_grad * scalar_val;
-                        parents[1].borrow_mut()._grad[0] +=
-                            child_grad * parents[0].borrow()._vals[i];
-                    }
+                let parents = &child.borrow()._parent_nodes;
+                let scalar_val = parents[1].borrow()._vals[0];
+                for (i, &child_grad) in child.borrow()._grad.iter().enumerate() {
+                    parents[0].borrow_mut()._grad[i] += child_grad * scalar_val;
+                    parents[1].borrow_mut()._grad[0] += child_grad * parents[0].borrow()._vals[i];
                 }
             }));
             result
@@ -162,42 +159,44 @@ impl Mul for &CalcNode {
                 })
                 .collect();
             let result = CalcNode::filled_from_shape((m, p), result);
-            result.borrow_mut()._parent_nodes = Some(vec![self.clone(), b.clone()]);
+            result.borrow_mut()._parent_nodes = vec![self.clone(), b.clone()];
             result.borrow_mut()._back_propagation = Some(Box::new(|child| {
-                if let Some(parents) = &child.borrow()._parent_nodes {
-                    let (_m, n) = parents[0].shape();
-                    let (_, p) = parents[1].shape();
+                let parents = &child.borrow()._parent_nodes;
+                let (_m, n) = parents[0].shape();
+                let (_, p) = parents[1].shape();
 
-                    for (i, &child_grad) in child.borrow()._grad.iter().enumerate() {
-                        let row = i / p;
-                        let col = i % p;
-                        {
-                            // RHS derivative
-                            let lhs = &parents[0].borrow()._vals;
-                            let rhs = &mut parents[1].borrow_mut()._grad;
-                            let lhs_row = lhs.iter().skip(row * n).take(n);
-                            let rhs_col = rhs.iter_mut().skip(col).step_by(p);
-                            rhs_col
-                                .zip(lhs_row)
-                                .for_each(|(d, &v)| *d += v * child_grad);
-                        }
+                for (i, &child_grad) in child.borrow()._grad.iter().enumerate() {
+                    let row = i / p;
+                    let col = i % p;
+                    {
+                        // RHS derivative
+                        let lhs = &parents[0].borrow()._vals;
+                        let rhs = &mut parents[1].borrow_mut()._grad;
+                        let lhs_row = lhs.iter().skip(row * n).take(n);
+                        let rhs_col = rhs.iter_mut().skip(col).step_by(p);
+                        rhs_col
+                            .zip(lhs_row)
+                            .for_each(|(d, &v)| *d += v * child_grad);
+                    }
 
-                        {
-                            // LHS derivative
-                            let lhs = &mut parents[0].borrow_mut()._grad;
-                            let rhs = &parents[1].borrow()._vals;
-                            let lhs_row = lhs.iter_mut().skip(row * n).take(n);
-                            let rhs_col = rhs.iter().skip(col).step_by(p);
-                            lhs_row
-                                .zip(rhs_col)
-                                .for_each(|(d, &v)| *d += v * child_grad);
-                        }
+                    {
+                        // LHS derivative
+                        let lhs = &mut parents[0].borrow_mut()._grad;
+                        let rhs = &parents[1].borrow()._vals;
+                        let lhs_row = lhs.iter_mut().skip(row * n).take(n);
+                        let rhs_col = rhs.iter().skip(col).step_by(p);
+                        lhs_row
+                            .zip(rhs_col)
+                            .for_each(|(d, &v)| *d += v * child_grad);
                     }
                 }
             }));
             result
         } else {
-            panic!("Invalid operands for multiplication. {} {}", self, other);
+            panic!(
+                "Invalid operands for multiplication. {} and {}",
+                self, other
+            );
         }
     }
 }
@@ -296,9 +295,9 @@ impl CalcNode {
             self.borrow()._shape,
             self.borrow()._vals.iter().map(|v| v.exp()).collect(),
         );
-        result.borrow_mut()._parent_nodes = Some(vec![self.clone()]);
+        result.borrow_mut()._parent_nodes = vec![self.clone()];
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
-            child.copy_parents().unwrap()[0]
+            child.copy_parents()[0]
                 .borrow_mut()
                 ._grad
                 .iter_mut()
@@ -316,14 +315,12 @@ impl CalcNode {
             self.borrow()._shape,
             self.borrow()._vals.iter().map(|v| v.ln()).collect(),
         );
-        result.borrow_mut()._parent_nodes = Some(vec![self.clone()]);
+        result.borrow_mut()._parent_nodes = vec![self.clone()];
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
-            if let Some(parents) = &child.borrow()._parent_nodes {
-                let parent = &parents[0];
-                for i in 0..parent.len() {
-                    let gradient = child.borrow()._grad[i] / parent.borrow()._vals[i];
-                    parent.borrow_mut()._grad[i] += gradient;
-                }
+            let parent = &child.borrow()._parent_nodes[0];
+            for i in 0..parent.len() {
+                let gradient = child.borrow()._grad[i] / parent.borrow()._vals[i];
+                parent.borrow_mut()._grad[i] += gradient;
             }
         }));
         result
@@ -339,21 +336,20 @@ impl CalcNode {
             self.borrow()._shape,
             self.borrow()._vals.iter().map(|v| v.powf(p)).collect(),
         );
-        result.borrow_mut()._parent_nodes = Some(vec![self.clone(), power.clone()]);
+        result.borrow_mut()._parent_nodes = vec![self.clone(), power.clone()];
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
-            if let Some(parents) = &child.borrow()._parent_nodes {
-                let base = &parents[0];
-                let power = &parents[1];
-                let power_val = power.value_indexed(0);
-                for i in 0..base.len() {
-                    let base_val = base.value_indexed(i);
-                    let child_val = child.value_indexed(i);
-                    let child_grad = child.gradient_indexed(i);
-                    let gradient = child_grad * power_val * base_val.powf(power_val - 1.);
-                    base.borrow_mut()._grad[i] += gradient;
-                    let gradient = child_grad * base_val.ln() * child_val;
-                    power.borrow_mut()._grad[0] += gradient;
-                }
+            let parents = &child.borrow()._parent_nodes;
+            let base = &parents[0];
+            let power = &parents[1];
+            let power_val = power.value_indexed(0);
+            for i in 0..base.len() {
+                let base_val = base.value_indexed(i);
+                let child_val = child.value_indexed(i);
+                let child_grad = child.gradient_indexed(i);
+                let gradient = child_grad * power_val * base_val.powf(power_val - 1.);
+                base.borrow_mut()._grad[i] += gradient;
+                let gradient = child_grad * base_val.ln() * child_val;
+                power.borrow_mut()._grad[0] += gradient;
             }
         }));
         result
@@ -362,20 +358,25 @@ impl CalcNode {
 
 impl CalcNode {
     pub fn element_wise_mul(&self, other: &Self) -> CalcNode {
-        let result = self.borrow()._vals.iter().zip(other.borrow()._vals.iter()).map(|(a,b)| a * b).collect();
+        let result = self
+            .borrow()
+            ._vals
+            .iter()
+            .zip(other.borrow()._vals.iter())
+            .map(|(a, b)| a * b)
+            .collect();
         let result = CalcNode::filled_from_shape(self.shape(), result);
-        result.borrow_mut()._parent_nodes = Some(vec![self.clone(), other.clone()]);
+        result.borrow_mut()._parent_nodes = vec![self.clone(), other.clone()];
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
-            if let Some(parents) = &child.borrow()._parent_nodes {
-                for (i, &child_grad) in child.borrow()._grad.iter().enumerate() {
-                    parents[0].borrow_mut()._grad[i] += child_grad * parents[1].borrow()._vals[i];
-                    parents[1].borrow_mut()._grad[i] += child_grad * parents[0].borrow()._vals[i];
-                }
+            let parents = &child.borrow()._parent_nodes;
+            for (i, &child_grad) in child.borrow()._grad.iter().enumerate() {
+                parents[0].borrow_mut()._grad[i] += child_grad * parents[1].borrow()._vals[i];
+                parents[1].borrow_mut()._grad[i] += child_grad * parents[0].borrow()._vals[i];
             }
         }));
         result
     }
-    
+
     pub fn element_wise_div(&self, other: &Self) -> CalcNode {
         self.element_wise_mul(&other.inv())
     }

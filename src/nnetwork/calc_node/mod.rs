@@ -10,7 +10,7 @@ pub use types::*;
 
 #[derive(Default)]
 pub struct CalcNodeCore {
-    _parent_nodes: Option<Vec<CalcNode>>,
+    _parent_nodes: Vec<CalcNode>,
     _shape: NodeShape,
     _vals: Vec<FloatType>,
     _grad: Vec<FloatType>,

@@ -17,11 +17,9 @@ impl CalcNode {
                 }
                 if !visited.contains(&ptr_as_usize(node)) {
                     visited.insert(ptr_as_usize(node));
-                    if let Some(parents) = &node.borrow()._parent_nodes {
-                        parents.iter().for_each(|parent| {
-                            topo_sort_recursive(parent, visited, out);
-                        });
-                    }
+                    node.borrow()._parent_nodes.iter().for_each(|parent| {
+                        topo_sort_recursive(parent, visited, out);
+                    });
                     out.push(node.clone());
                 }
             }

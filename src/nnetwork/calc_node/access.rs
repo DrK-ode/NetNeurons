@@ -9,7 +9,7 @@ impl CalcNodeCore {
     pub fn grad(&self) -> &[FloatType] {
         &self._grad
     }
-    pub fn parents(&self) -> &Option<Vec<CalcNode>>{
+    pub fn parents(&self) -> &[CalcNode]{
         &self._parent_nodes
     }
     pub fn back_propagation(&self) -> &Option<Box<dyn Fn(CalcNode)>>{
@@ -135,7 +135,7 @@ impl Display for NodeType {
 
 // Access methods
 impl CalcNode {
-    pub fn copy_parents(&self) -> Option<Vec<CalcNode>> {
+    pub fn copy_parents(&self) -> Vec<CalcNode> {
         self.borrow()._parent_nodes.clone()
     }
 

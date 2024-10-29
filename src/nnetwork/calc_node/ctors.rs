@@ -3,7 +3,10 @@ use std::{cell::RefCell, rc::Rc};
 use rand::{thread_rng, Rng};
 use rand_distr::StandardNormal;
 
-use super::{types::{FloatType, NodeShape}, CalcNodeCore, CalcNode};
+use super::{
+    types::{FloatType, NodeShape},
+    CalcNode, CalcNodeCore,
+};
 
 // Ctors
 impl CalcNode {
@@ -11,8 +14,21 @@ impl CalcNode {
         shape.0 * shape.1
     }
 
-    pub fn new() -> Self {
-        Self::from_node(CalcNodeCore::default())
+    pub fn new(
+        shape: NodeShape,
+        vals: Vec<FloatType>,
+        parents: Vec<CalcNode>,
+        back_propagation: Option<Box<dyn Fn(CalcNode)>>,
+    ) -> Self {
+        let size = Self::size_of_shape(&shape);
+        assert_eq!(size, vals.len());
+        Self::from_node(CalcNodeCore {
+            _shape: shape,
+            _vals: vals,
+            _grad: vec![f64::NAN; size],
+            _parent_nodes: parents,
+            _back_propagation: back_propagation
+        })
     }
 
     fn from_node(n: CalcNodeCore) -> Self {
@@ -45,15 +61,8 @@ impl CalcNode {
         })
     }
 
-    pub fn filled_from_shape(shape: NodeShape, value: Vec<FloatType>) -> Self {
-        let size = Self::size_of_shape(&shape);
-        assert_eq!(size, value.len());
-        Self::from_node(CalcNodeCore {
-            _shape: shape,
-            _vals: value,
-            _grad: vec![f64::NAN; size],
-            ..Default::default()
-        })
+    pub fn filled_from_shape(shape: NodeShape, vals: Vec<FloatType>) -> Self {
+        Self::new(shape, vals, vec![], None)
     }
 
     pub fn rand_from_shape(shape: NodeShape) -> Self {
