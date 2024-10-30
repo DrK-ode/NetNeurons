@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["NodeType","VecOrientation"],"mod":["loss_functions"],"struct":["CalcNode","CalcNodeCore","FunctionLayer","LinearLayer","MultiLayer","ReshapeLayer"],"trait":["Layer","Parameters"],"type":["FloatType","NodeShape"]};
