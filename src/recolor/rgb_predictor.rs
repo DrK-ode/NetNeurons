@@ -6,15 +6,17 @@ use crate::nnetwork::{
     MultiLayer, Parameters,
 };
 
-pub type ColorFunction = Box<dyn Fn((FloatType, FloatType)) -> [bool; 3]>;
+use crate::recolor::color_key::ColorKey;
 
+/// Manages the construction and training of a network that decides what color a pixel should have.
 pub struct ColorSelector {
-    _color_key: ColorFunction,
+    _color_key: ColorKey,
     _mlp: MultiLayer,
     _regularization: Option<FloatType>,
 }
 
 impl ColorSelector {
+    // Helps ctor
     fn create_layers(n_hidden_layers: usize, layer_size: usize) -> Vec<Box<dyn Layer>> {
         const BIASED_LAYERS: bool = true;
         const INPUT_DIM: usize = 2;
@@ -25,7 +27,8 @@ impl ColorSelector {
         //let non_linearity = FunctionLayer::new(&FunctionLayer::leaky_relu, "Leaky ReLU", "Non-linearity layer");
         let mut layers: Vec<Box<dyn Layer>> = Vec::new();
 
-        layers.push(Box::new(LinearLayer::from_rand(
+        // Input layer
+        layers.push(Box::new(LinearLayer::new_rand(
             layer_size,
             INPUT_DIM,
             BIASED_LAYERS,
@@ -35,7 +38,7 @@ impl ColorSelector {
 
         // Hidden layers
         for n in 0..n_hidden_layers {
-            layers.push(Box::new(LinearLayer::from_rand(
+            layers.push(Box::new(LinearLayer::new_rand(
                 layer_size,
                 layer_size,
                 BIASED_LAYERS,
@@ -43,7 +46,9 @@ impl ColorSelector {
             )));
             layers.push(Box::new(non_linearity.clone()));
         }
-        layers.push(Box::new(LinearLayer::from_rand(
+        
+        // Output layer
+        layers.push(Box::new(LinearLayer::new_rand(
             OUTPUT_DIM,
             layer_size,
             BIASED_LAYERS,
@@ -54,8 +59,9 @@ impl ColorSelector {
         layers
     }
 
+    /// After each linear layer a  non-linear [FunctionLayer] is inserted.
     pub fn new(
-        color_func: ColorFunction,
+        color_key: ColorKey,
         n_hidden_layers: usize,
         layer_size: usize,
         regularization: Option<FloatType>,
@@ -64,13 +70,13 @@ impl ColorSelector {
         mlp.set_regularization(regularization);
         mlp.set_loss_function(&least_squares);
         ColorSelector {
-            _color_key: color_func,
+            _color_key: color_key,
             _mlp: mlp,
             _regularization: regularization,
         }
     }
 
-    fn color(&self, coords: (FloatType, FloatType)) -> CalcNode {
+    fn coords_to_rgb(&self, coords: (FloatType, FloatType)) -> CalcNode {
         CalcNode::new_col_vector(
             (self._color_key)(coords)
                 .into_iter()
@@ -79,6 +85,7 @@ impl ColorSelector {
         )
     }
 
+    /// Returns predicted RGB values for the specified coordinates.
     pub fn predict(&self, coords: (FloatType, FloatType)) -> [FloatType; 3] {
         let coords = CalcNode::new_col_vector(vec![coords.0, coords.1]);
         self._mlp
@@ -90,6 +97,7 @@ impl ColorSelector {
             })
     }
 
+    // Creates a list of tuples containing input coords and the correct color
     fn calc_correlations(
         &self,
         batch_size: usize,
@@ -102,13 +110,17 @@ impl ColorSelector {
         (0..batch_size)
             .map(|_| {
                 let coords = (x_dist.sample(&mut rng), y_dist.sample(&mut rng));
-                let color = self.color(coords);
+                let color = self.coords_to_rgb(coords);
                 let coords = CalcNode::new_col_vector(vec![coords.0, coords.1]);
                 (coords, color)
             })
             .collect()
     }
 
+    /// Trains the network for the specified number of cycles. Each cycles uses ´batch_size´ data points.
+    /// The learning rate is a range from highest to lowest which will be logspaced so that the learning rate get lower for each cycle.
+    /// 
+    /// Returns a vector of learning rates and loss values
     pub fn train(
         &mut self,
         cycles: usize,

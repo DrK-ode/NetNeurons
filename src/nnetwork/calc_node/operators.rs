@@ -3,7 +3,9 @@ use std::{
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
-use super::CalcNode;
+use rand::Rng;
+
+use super::{CalcNode, NodeType};
 
 impl Sum for CalcNode {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -12,6 +14,7 @@ impl Sum for CalcNode {
 }
 
 impl CalcNode {
+    /// Returns the sum of all values in the [CalcNode], i.e., the result will be a scalar.
     pub fn sum(&self) -> CalcNode {
         let result = Self::new_scalar(self.borrow()._vals.iter().sum());
         result.borrow_mut()._parent_nodes = vec![self.clone()];
@@ -26,23 +29,40 @@ impl CalcNode {
         result
     }
 
+    /// Normalises the [CalcNode] so that its sum becomes unity.
     pub fn normalized(&self) -> CalcNode {
         self / self.sum()
     }
-}
-
-impl Add for CalcNode {
-    type Output = CalcNode;
-
-    fn add(self, rhs: CalcNode) -> Self::Output {
-        &self + &rhs
+    
+    /// Collapses the [CalcNode] to a one-hot vector. Only makes sense if you can interpret the values as a probabilities that sum to unity.
+    pub fn collapse(&self) -> CalcNode {
+        let mut vec = vec![0.; self.len()];
+        let mut rnd = rand::thread_rng().gen_range(0. ..self.borrow()._vals.iter().sum());
+        for (i, &v) in self.borrow()._vals.iter().enumerate() {
+            rnd -= v;
+            if rnd <= 0. || i + 1 == self.len() {
+                // Safe-guard against float precision errors
+                vec[i] = 1.;
+                break;
+            }
+        }
+        CalcNode::new_from_shape(self.shape(), vec)
     }
 }
+
+/// Addition is implemented for all combinations of [CalcNode] and &[CalcNode].
 impl Add<&CalcNode> for CalcNode {
     type Output = CalcNode;
 
     fn add(self, rhs: &CalcNode) -> Self::Output {
         &self + rhs
+    }
+}
+impl Add for CalcNode {
+    type Output = CalcNode;
+
+    fn add(self, rhs: CalcNode) -> Self::Output {
+        &self + &rhs
     }
 }
 impl Add<CalcNode> for &CalcNode {
@@ -52,7 +72,6 @@ impl Add<CalcNode> for &CalcNode {
         self + &rhs
     }
 }
-
 impl Add for &CalcNode {
     type Output = CalcNode;
 
@@ -92,14 +111,15 @@ impl Add for &CalcNode {
     }
 }
 
-impl Mul<CalcNode> for CalcNode {
-    type Output = CalcNode;
-
-    fn mul(self, rhs: CalcNode) -> Self::Output {
-        &self * &rhs
-    }
-}
-
+/// Multiplication is implemented for all combinations of [CalcNode] and &[CalcNode].
+/// 
+/// Two kinds of multiplications are recognised:
+/// 1. multiplication by a scalar, and
+/// 2. the dot product.
+/// 
+/// Element-wise multiplication is provided by [CalcNode::element_wise_mul].
+/// 
+/// Will panic if the dimensions of LHS and RHS does not match.
 impl Mul<&CalcNode> for CalcNode {
     type Output = CalcNode;
 
@@ -107,7 +127,13 @@ impl Mul<&CalcNode> for CalcNode {
         &self * rhs
     }
 }
+impl Mul<CalcNode> for CalcNode {
+    type Output = CalcNode;
 
+    fn mul(self, rhs: CalcNode) -> Self::Output {
+        &self * &rhs
+    }
+}
 impl Mul<CalcNode> for &CalcNode {
     type Output = CalcNode;
 
@@ -115,7 +141,6 @@ impl Mul<CalcNode> for &CalcNode {
         self * &rhs
     }
 }
-
 impl Mul for &CalcNode {
     type Output = CalcNode;
 
@@ -221,6 +246,14 @@ impl Mul for &CalcNode {
     }
 }
 
+/// Subtraction is implemented for all combinations of [CalcNode] and &[CalcNode].
+impl Sub<&CalcNode> for CalcNode {
+    type Output = CalcNode;
+
+    fn sub(self, rhs: &Self) -> Self::Output {
+        &self - rhs
+    }
+}
 impl Sub for &CalcNode {
     type Output = CalcNode;
 
@@ -228,7 +261,6 @@ impl Sub for &CalcNode {
         self + (-rhs)
     }
 }
-
 impl Sub<CalcNode> for &CalcNode {
     type Output = CalcNode;
 
@@ -236,7 +268,6 @@ impl Sub<CalcNode> for &CalcNode {
         self - &rhs
     }
 }
-
 impl Sub for CalcNode {
     type Output = CalcNode;
 
@@ -245,23 +276,28 @@ impl Sub for CalcNode {
     }
 }
 
-impl Sub<&CalcNode> for CalcNode {
+/// Division is implemented for all combinations of [CalcNode] and &[CalcNode].
+/// 
+/// If the RHS is a sclar every LHS value is divided by that scalar. Otherwise, an element-wise division is performed.
+impl Div<&CalcNode> for CalcNode {
     type Output = CalcNode;
 
-    fn sub(self, rhs: &Self) -> Self::Output {
-        &self - rhs
+    fn div(self, rhs: &Self) -> Self::Output {
+        &self / rhs
     }
 }
-
 impl Div for &CalcNode {
     type Output = CalcNode;
 
-    #[allow(clippy::suspicious_arithmetic_impl)]
     fn div(self, rhs: Self) -> Self::Output {
-        self * rhs.inv()
+        if rhs.node_type() == NodeType::Scalar {
+            self * rhs.inv()
+        }
+        else{
+            self.element_wise_div(rhs)
+        }
     }
 }
-
 impl Div for CalcNode {
     type Output = CalcNode;
 
@@ -269,20 +305,11 @@ impl Div for CalcNode {
         &self / &rhs
     }
 }
-
 impl Div<CalcNode> for &CalcNode {
     type Output = CalcNode;
 
     fn div(self, rhs: CalcNode) -> Self::Output {
         self / &rhs
-    }
-}
-
-impl Div<&CalcNode> for CalcNode {
-    type Output = CalcNode;
-
-    fn div(self, rhs: &Self) -> Self::Output {
-        &self / rhs
     }
 }
 
@@ -293,7 +320,6 @@ impl Neg for CalcNode {
         -&self
     }
 }
-
 impl Neg for &CalcNode {
     type Output = CalcNode;
 
@@ -302,14 +328,15 @@ impl Neg for &CalcNode {
     }
 }
 
-// Invert
 impl CalcNode {
+    /// Inverts all values.
     pub fn inv(&self) -> CalcNode {
         self.pow(&Self::new_scalar(-1.))
     }
 }
-// Exponentiate
+
 impl CalcNode {
+    /// Exponentiates all values.    
     pub fn exp(&self) -> CalcNode {
         let result = Self::new_from_shape(
             self.borrow()._shape,
@@ -330,6 +357,7 @@ impl CalcNode {
 
 // Log
 impl CalcNode {
+    /// Applies the natural logarithm to all values.    
     pub fn log(&self) -> CalcNode {
         let result = Self::new_from_shape(
             self.borrow()._shape,
@@ -347,8 +375,8 @@ impl CalcNode {
     }
 }
 
-// Pow
 impl CalcNode {
+    /// Applies the power function to all values.    
     pub fn pow(&self, power: &CalcNode) -> CalcNode {
         assert!(power.len() == 1);
         let p = power.value_indexed(0);
@@ -377,6 +405,9 @@ impl CalcNode {
 }
 
 impl CalcNode {
+    /// Multiplies the two objects element-wise.
+    /// 
+    /// Multiplication by scalar and the dot product are provided by [CalcNode::mul].
     pub fn element_wise_mul(&self, other: &Self) -> CalcNode {
         let result = self
             .borrow()
@@ -399,7 +430,7 @@ impl CalcNode {
         result
     }
 
-    pub fn element_wise_div(&self, other: &Self) -> CalcNode {
+    fn element_wise_div(&self, other: &Self) -> CalcNode {
         self.element_wise_mul(&other.inv())
     }
 }
@@ -430,6 +461,19 @@ mod tests {
         assert_eq!(out.gradient_indexed(0), 1.);
         assert_eq!(inp.gradient_indexed(0), 2.);
     }
+    
+        #[test]
+        fn addition_of_vector_to_itself() {
+            let inp = CalcNode::new_col_vector(vec![1.,1.]);
+            let mut out = &inp + &inp;
+            assert_eq!(out.value_indexed(0), 2.);
+            assert_eq!(out.value_indexed(1), 2.);
+            out.back_propagation();
+            assert_eq!(out.gradient_indexed(0), 1.);
+            assert_eq!(out.gradient_indexed(1), 1.);
+            assert_eq!(inp.gradient_indexed(0), 2.);
+            assert_eq!(inp.gradient_indexed(1), 2.);
+        }
 
     #[test]
     fn addition_of_vector_and_scalar() {

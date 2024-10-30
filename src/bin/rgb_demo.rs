@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use neuronfun::{color_selector::ColorSelector, nnetwork::FloatType};
+use net_neurons::{nnetwork::FloatType, recolor::{color_key::{ColorKey, RGB_VENN_DIAGRAM}, ColorSelector}};
 use plotters::{
     chart::{ChartBuilder, LabelAreaPosition},
     prelude::{BitMapBackend, Cross, IntoDrawingArea, Rectangle},
@@ -8,54 +8,64 @@ use plotters::{
 };
 
 fn main() {
-    let n_hidden_layers = 3;
-    let layer_size = 20;
-    let regularization = None;
+    // Specifies wheter a pixel is red, green and/or blue
+    const COLOR_KEY: ColorKey = RGB_VENN_DIAGRAM;
+    // Every neural network will have an input and output layer. The hidden layers are inbetween these.
+    const N_HIDDEN_LAYERS: usize = 3;
+    // The layers are square so the number of neurons is this number squared
+    const LAYER_SIZE: usize = 20;
+    // Set to some to punish non-zero parameters.
+    const REGULARIZATION: Option<FloatType> = None;
 
-    let mut categorize = ColorSelector::new(
-        Box::new(|(x, y)| {
-            [
-                (x - 0.2165).powi(2) + (y+0.125).powi(2) < 0.25,
-                (x + 0.2165).powi(2) + (y+0.125).powi(2) < 0.25,
-                x.powi(2) + (y - 0.25).powi(2) < 0.25,
-            ]
-        }),
-        n_hidden_layers,
-        layer_size,
-        regularization,
-    );
+    // Instantiate the network
+    let mut categorize = ColorSelector::new(COLOR_KEY, N_HIDDEN_LAYERS, LAYER_SIZE, REGULARIZATION);
 
-    match categorize.import_parameters("rgb.param") {
-        Ok(_) => println!("Successful parameter import from rgb.param."),
+    // Import previously exported parameters if able. Will fallback to random initiated neurons if the file does not exist, but panic on other errors.
+    const IMPORT_FILENAME: &str = "rgb.param";
+    match categorize.import_parameters(IMPORT_FILENAME) {
+        Ok(_) => println!("Successful parameter import from {IMPORT_FILENAME}."),
         Err(err) => match err.kind() {
             std::io::ErrorKind::NotFound | std::io::ErrorKind::UnexpectedEof => {
-                eprintln!("Parameter import failed, using randomly initialized parameters instead.")
+                eprintln!("Parameter import from {IMPORT_FILENAME} failed, using randomly initialized parameters instead.")
             }
-            _ => panic!("Parameter import failed: {}", err),
+            _ => panic!(
+                "Parameter import from {IMPORT_FILENAME} failed catastrophically: {}",
+                err
+            ),
         },
     }
 
-    let training_cycles = 100000;
-    let batch_size = 100;
-    let learning_rate = 0.1..0.01; // Logspaced
-    let x_range = -1. ..1.;
-    let y_range = -1. ..1.;
-    let verbose = true;
-
+    // The number of updates to the netowrk
+    const TRAINING_CYCLES: usize = 100000;
+    // The number of data points to use before updating the network by back propagation
+    const TRAINING_BATCH_SIZE: usize = 100;
+    // The range of learning rates to be used. Will be logspaced.
+    const LEARNING_RATE: Range<FloatType> = 0.1..0.01;
+    // Limit the input coordinate space
+    const X_RANGE: Range<FloatType> = -1. ..1.;
+    const Y_RANGE: Range<FloatType> = -1. ..1.;
+    // Lots of text...or not
+    const VERBOSE: bool = true;
+    // Returns a vector of learning rates and loss values
     let training_data = categorize.train(
-        training_cycles,
-        batch_size,
-        learning_rate,
-        &x_range,
-        &y_range,
-        verbose,
+        TRAINING_CYCLES,
+        TRAINING_BATCH_SIZE,
+        LEARNING_RATE,
+        &X_RANGE,
+        &Y_RANGE,
+        VERBOSE,
     );
 
-    if let Ok(filename) = categorize.export_parameters("rgb.param") {
+    // Save the resulting network. Will overwrite any existing file!
+    const EXPORT_FILENAME: &str = "rgb.param";
+    if let Ok(filename) = categorize.export_parameters(EXPORT_FILENAME) {
         println!("Exported RGB parameters to {filename}");
     }
 
-    plot_predictions(&categorize, &x_range, &y_range, 500).unwrap();
+    // Plots the colours predicted by the network for a sample of coordinates
+    const X_SAMPLES: u32 = 500;
+    plot_predictions(&categorize, &X_RANGE, &Y_RANGE, X_SAMPLES).unwrap();
+    // Plots a diagram of log(loss) vs p(learning rate)
     plot_training_progress(&training_data).unwrap();
 }
 
@@ -66,7 +76,10 @@ fn plot_predictions(
     x_divisions: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let size = (x_range.end - x_range.start, y_range.end - y_range.start);
-    let division = (x_divisions, (x_divisions as f64 * size.1 / size.0) as usize);
+    let division = (
+        x_divisions,
+        (x_divisions as FloatType * size.1 / size.0) as usize,
+    );
     let step = (
         size.0 / division.0 as FloatType,
         size.1 / division.1 as FloatType,
@@ -75,7 +88,7 @@ fn plot_predictions(
     const X_PIXELS: u32 = 1000;
     let drawing_area = BitMapBackend::new(
         "plot_rgb.png",
-        (X_PIXELS, (X_PIXELS as f64 * size.1 / size.0) as u32),
+        (X_PIXELS, (X_PIXELS as FloatType * size.1 / size.0) as u32),
     )
     .into_drawing_area();
     drawing_area.fill(&WHITE)?;
@@ -125,12 +138,12 @@ fn plot_training_progress(
         BitMapBackend::new("plot_loss.png", (X_PIXELS, Y_PIXELS)).into_drawing_area();
     let min = training_data
         .iter()
-        .fold((f64::MAX, f64::MAX), |acc, (x, y)| {
+        .fold((FloatType::MAX, FloatType::MAX), |acc, (x, y)| {
             (x.min(acc.0), y.min(acc.1))
         });
     let max = training_data
         .iter()
-        .fold((f64::MIN, f64::MIN), |acc, (x, y)| {
+        .fold((FloatType::MIN, FloatType::MIN), |acc, (x, y)| {
             (x.max(acc.0), y.max(acc.1))
         });
     let x_begin = -max.0.log10();

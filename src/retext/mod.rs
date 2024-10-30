@@ -1,4 +1,4 @@
 pub mod char_set;
-mod predictor;
+mod text_predictor;
 
-pub use predictor::ReText;
+pub use text_predictor::ReText;

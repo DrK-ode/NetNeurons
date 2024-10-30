@@ -9,6 +9,7 @@ use crate::nnetwork::Parameters;
 
 use super::Layer;
 
+/// Standard layer consisting of a matrix of weights and a column vector of biases. The biases are optional.
 pub struct LinearLayer {
     _w: CalcNode,
     _b: Option<CalcNode>,
@@ -16,7 +17,8 @@ pub struct LinearLayer {
 }
 
 impl LinearLayer {
-    pub fn from_rand(n_rows: usize, n_cols: usize, biased: bool, label: &str) -> LinearLayer {
+    /// Creates a [LinearLayer] with random weights and (optional) biases.
+    pub fn new_rand(n_rows: usize, n_cols: usize, biased: bool, label: &str) -> LinearLayer {
         LinearLayer {
             _w: CalcNode::rand_from_shape((n_rows, n_cols)),
             _b: if biased {
@@ -27,6 +29,10 @@ impl LinearLayer {
             _label: label.to_string(),
         }
     }
+
+    /// Creates a [LinearLayer] with predetermined weights and biases.
+    ///
+    /// Will panic if the number of rows of the matrix and column vector does not match.
     pub fn from_nodes(w: CalcNode, b: Option<CalcNode>, label: &str) -> LinearLayer {
         assert!(
             !w.is_empty() && (b.is_none() || !b.as_ref().unwrap().is_empty()),
@@ -91,7 +97,9 @@ impl Layer for LinearLayer {
     }
 }
 
+/// A [Layer] type that only coerces the input into a new shape without changing its values.
 pub struct ReshapeLayer {
+    /// Target node shape. The input must have the same size.
     _shape: NodeShape,
     _label: String,
 }
@@ -133,6 +141,16 @@ impl Layer for ReshapeLayer {
     }
 }
 
+/// A [Layer] type that applies a mathematical function to the input [CalcNode]. The function is responsible for also setting up the gradient calculation for back propagation to work.
+///
+/// # Example
+/// Some commonly used functions are already implemented, e.g., [FunctionLayer::sigmoid], [FunctionLayer::tanh], [FunctionLayer::leaky_relu], [FunctionLayer::softmax].
+/// ```
+/// use net_neurons::nnetwork::{CalcNode, FunctionLayer};
+///
+/// let non_linearity =
+///     FunctionLayer::new(&FunctionLayer::sigmoid, "Sigmoid", "Non-linearity layer");
+/// ```
 #[derive(Clone)]
 pub struct FunctionLayer {
     _func: &'static dyn Fn(&CalcNode) -> CalcNode,
@@ -154,14 +172,14 @@ impl FunctionLayer {
     }
 
     // Helper function for implementations of functions b=f(a) that has derivatives that can be expressed as a function of the result, f'(b)
-    fn function_layer_back_propagator(inp: &CalcNode, func: &dyn Fn(FloatType)->FloatType, gfunc: &'static dyn Fn(FloatType)->FloatType ) -> CalcNode {
+    fn function_layer_back_propagator(
+        inp: &CalcNode,
+        func: &dyn Fn(FloatType) -> FloatType,
+        gfunc: &'static dyn Fn(FloatType) -> FloatType,
+    ) -> CalcNode {
         CalcNode::new(
             inp.shape(),
-            inp.borrow()
-                .vals()
-                .iter()
-                .map(|&x| (func)(x))
-                .collect(),
+            inp.borrow().vals().iter().map(|&x| (func)(x)).collect(),
             vec![inp.clone()],
             Some(Box::new(|child: CalcNode| {
                 child.copy_parents()[0].add_grad(
@@ -170,26 +188,30 @@ impl FunctionLayer {
                         .vals()
                         .iter()
                         .zip(child.borrow().grad().iter())
-                        .map(|(&x, &g)| {
-                            (gfunc)(x) * g})
+                        .map(|(&x, &g)| (gfunc)(x) * g)
                         .collect::<Vec<_>>(),
                 );
             })),
         )
     }
-    
+
     pub fn sigmoid(inp: &CalcNode) -> CalcNode {
-        Self::function_layer_back_propagator(inp, &|x| 1. / (1. + (-x).exp()), &|x| x*(1.-x) )
+        Self::function_layer_back_propagator(inp, &|x| 1. / (1. + (-x).exp()), &|x| x * (1. - x))
     }
-    
+
     pub fn tanh(inp: &CalcNode) -> CalcNode {
-        Self::function_layer_back_propagator(inp, &|x| x.tanh(), &|x| (1.-x*x) )
+        Self::function_layer_back_propagator(inp, &|x| x.tanh(), &|x| (1. - x * x))
     }
-    
+
     pub fn leaky_relu(inp: &CalcNode) -> CalcNode {
-        Self::function_layer_back_propagator(inp, &|x| if x > 0. {x} else {0.01*x}, &|x| if x > 0. {1.} else {0.01})
+        const FRACTION: FloatType = 0.01;
+        Self::function_layer_back_propagator(
+            inp,
+            &|x| if x > 0. { x } else { FRACTION * x },
+            &|x| if x > 0. { 1. } else { FRACTION },
+        )
     }
-    
+
     pub fn softmax(inp: &CalcNode) -> CalcNode {
         inp.exp().normalized()
     }
@@ -228,7 +250,7 @@ mod tests {
     #[test]
     fn unbiased_layer_forward() {
         let layer = LinearLayer::from_nodes(
-            CalcNode::filled_from_shape((2, 2), vec![1., 2., 3., 4.]),
+            CalcNode::new_from_shape((2, 2), vec![1., 2., 3., 4.]),
             None,
             "TestLayer",
         );
@@ -253,7 +275,7 @@ mod tests {
     #[test]
     fn biased_layer_forward() {
         let layer = LinearLayer::from_nodes(
-            CalcNode::filled_from_shape((2, 2), vec![1., 2., 3., 4.]),
+            CalcNode::new_from_shape((2, 2), vec![1., 2., 3., 4.]),
             Some(CalcNode::new_col_vector(vec![7., 8.])),
             "TestLayer",
         );

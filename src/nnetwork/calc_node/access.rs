@@ -2,6 +2,7 @@ use std::{cell::RefCell, fmt::Display, ops::Deref, rc::Rc};
 
 use super::{CalcNode, CalcNodeCore, FloatType, NodeShape, NodeType, VecOrientation};
 
+/// Read-only access to the private fields
 impl CalcNodeCore {
     pub fn vals(&self) -> &[FloatType] {
         &self._vals
@@ -29,6 +30,7 @@ impl Deref for CalcNode {
 }
 
 impl CalcNode {
+    /// Returns the size, i.e., the number of values in the node
     pub fn len(&self) -> usize {
         {
             let shape: &NodeShape = &self.shape();
@@ -42,6 +44,7 @@ impl CalcNode {
 }
 
 impl CalcNode {
+    /// Returns the enum [NodeType] to easily categorize what kind of node we are dealing with.
     pub fn node_type(&self) -> NodeType {
         match self.borrow()._shape {
             (0, _) | (_, 0) => {
@@ -135,6 +138,7 @@ impl Display for NodeType {
 
 // Access methods
 impl CalcNode {
+    /// The returned [CalcNode] copies are shallow. The underlying [CalcNodeCore]s are not copied.
     pub fn copy_parents(&self) -> Vec<CalcNode> {
         self.borrow()._parent_nodes.clone()
     }
@@ -143,43 +147,57 @@ impl CalcNode {
         self.borrow()._shape
     }
 
+    /// Returns a [Vec] containing the raw float values.
     pub fn copy_vals(&self) -> Vec<FloatType> {
         self.borrow()._vals.clone()
     }
 
+    /// Returns a [Vec] containing the raw float gradient values.
     pub fn copy_grad(&self) -> Vec<FloatType> {
         self.borrow()._grad.clone()
     }
 
+    /// Returns a specific value by index
     pub fn value_indexed(&self, i: usize) -> FloatType {
         self.borrow()._vals[i]
     }
 
+    /// Returns a specific gradient value by index
     pub fn gradient_indexed(&self, i: usize) -> FloatType {
         self.borrow()._grad[i]
     }
 
+    /// Overwrites all values with the ones supplied. Will panic if a wrong number of values are given.
     pub fn set_vals(&mut self, vals: &[FloatType]) {
         assert_eq!(vals.len(), self.borrow()._vals.len());
         self.borrow_mut()._vals = vals.to_vec();
     }
+    
+    /// Sets one specific value by index.
+    pub fn set_value_indexed(&mut self, i:usize, val: FloatType) {
+        assert!( i < self.len());
+        self.borrow_mut()._vals[i] = val;
+    }
 
+    /// Increments all gradients element-wise with the values supplied.
     pub fn add_grad(&mut self, grad: &[FloatType]) {
         assert_eq!(grad.len(), self.borrow()._grad.len());
         self.borrow_mut()._grad.iter_mut().zip(grad.iter()).for_each(|(target, &value)| {
             *target += value});
     }
     
+    /// Resets all gradient values to zero.
+    pub fn reset_grad(&mut self){
+        self.borrow_mut()._grad.iter_mut().for_each(|g| *g = 0.);
+    }
+    
+    /// Overwrites all gradient values with the ones supplied. Will panic if a wrong number of values are given.
     pub fn set_grad(&mut self, grad: &[FloatType]) {
         assert_eq!(grad.len(), self.borrow()._grad.len());
         self.borrow_mut()._grad = grad.to_vec();
     }
     
-    pub fn set_value_indexed(&mut self, i:usize, val: FloatType) {
-        assert!( i < self.len());
-        self.borrow_mut()._vals[i] = val;
-    }
-    
+    /// Sets one specific gradient by index.
     pub fn set_gradient_indexed(&mut self, i:usize, val: FloatType) {
         assert!( i < self.len());
         self.borrow_mut()._grad[i] = val;

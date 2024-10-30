@@ -3,8 +3,8 @@ use std::io::Error;
 use std::time::Instant;
 
 use crate::{
-    retext::char_set::{CharSet, DataSetError},
     nnetwork::{FunctionLayer, LinearLayer, Parameters, ReshapeLayer},
+    retext::char_set::{CharSet, DataSetError},
 };
 
 use crate::nnetwork::{loss_functions::neg_log_likelihood, CalcNode, FloatType, Layer, MultiLayer};
@@ -31,9 +31,9 @@ impl ReText {
 
         //Embed
         if let Some(embed_dim) = embed_dim {
-            let embed_layer = LinearLayer::from_rand(embed_dim, n_chars, false, "Embedding layer");
+            let embed_layer = LinearLayer::new_rand(embed_dim, n_chars, false, "Embedding layer");
             let reshape_layer = ReshapeLayer::new((block_size * embed_dim, 1), "Reshaping layer");
-            let resize_layer = LinearLayer::from_rand(
+            let resize_layer = LinearLayer::new_rand(
                 layer_dim,
                 block_size * embed_dim,
                 BIASED_LAYERS,
@@ -45,14 +45,14 @@ impl ReText {
             layers.push(Box::new(resize_layer));
         } else {
             let resize_layer =
-                LinearLayer::from_rand(layer_dim, n_chars, BIASED_LAYERS, "Resizing layer (in)");
+                LinearLayer::new_rand(layer_dim, n_chars, BIASED_LAYERS, "Resizing layer (in)");
             layers.push(Box::new(resize_layer));
         }
         layers.push(Box::new(non_linearity.clone()));
 
         // Hidden layers
         for n in 0..n_hidden_layers {
-            layers.push(Box::new(LinearLayer::from_rand(
+            layers.push(Box::new(LinearLayer::new_rand(
                 layer_dim,
                 layer_dim,
                 BIASED_LAYERS,
@@ -62,7 +62,7 @@ impl ReText {
         }
 
         // Deembed
-        layers.push(Box::new(LinearLayer::from_rand(
+        layers.push(Box::new(LinearLayer::new_rand(
             n_chars,
             layer_dim,
             BIASED_LAYERS,
@@ -197,7 +197,7 @@ impl ReText {
         for _ in 0..number_of_characters {
             // The following line break upon non ascii input
             let mut last = self._dataset.encode(&str[str.len() - self._block_size..])?;
-            last = self._mlp.predict(&last);
+            last = self._mlp.forward(&last).collapse();
             let c = self._dataset.decode_char(&last)?;
             if c == SENTINEL_TOKEN.chars().nth(0).unwrap() {
                 break;

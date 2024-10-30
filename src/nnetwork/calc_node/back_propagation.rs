@@ -3,6 +3,18 @@ use std::{cell::RefCell, collections::HashSet};
 use super::{CalcNode, CalcNodeCore, FloatType};
 
 impl CalcNode {
+    /// Recalculates the gradients of all nodes leading up to the current one. The gradient of the current node is set to unity.
+    /// 
+    /// # Example
+    /// ```
+    /// use net_neurons::nnetwork::CalcNode;
+    /// 
+    /// let a = CalcNode::new_scalar(2.);
+    /// let mut b = &a * &a;
+    /// b.back_propagation();
+    /// assert_eq!(a.gradient_indexed(0), 4.);
+    /// assert_eq!(b.gradient_indexed(0), 1.);
+    /// ```
     pub fn back_propagation(&mut self) {
         // Returns a sorted list of CalcNodes
         fn topo_sort(root: &CalcNode) -> Vec<CalcNode> {
@@ -32,13 +44,13 @@ impl CalcNode {
         }
 
         // The final result will be at the end of the vector
-        let sorted = topo_sort(self);
+        let mut sorted = topo_sort(self);
         // Initialise all gradients to zero
         sorted
-            .iter()
-            .for_each(|node| node.borrow_mut()._grad.iter_mut().for_each(|g| *g = 0.));
+            .iter_mut()
+            .for_each(|node| node.reset_grad());
         // Initialise the root gradient to unity
-        self.borrow_mut()._grad.iter_mut().for_each(|g| *g = 1.);
+        self.set_grad(&vec![1.;self.len()]);
         // Back propagate all other gradients
         sorted.iter().rev().for_each(|node| {
             // The original nodes will not have a differentiation function
@@ -48,7 +60,7 @@ impl CalcNode {
         });
     }
 
-    // Adjusts values based on a constant learning rate and a previously calculated gradient
+    /// Decends the gradient by a fraction of the calculated gradient.
     pub fn decend_grad(&mut self, learning_rate: FloatType) {
         let mut tmp = RefCell::new(CalcNodeCore::default());
         // Bring the node outside the RefCell since we need to borrow both values and gradients at the same time

@@ -4,14 +4,12 @@ use std::{
     io::{Error, Write},
 };
 
-use rand::Rng;
-
 use crate::nnetwork::{calc_node::FloatType, CalcNode, Layer, Parameters};
 
-use super::loss_functions::neg_log_likelihood;
+use super::loss_functions::{neg_log_likelihood, LossFuncType};
 
-pub type LossFuncType = dyn Fn(&CalcNode, &CalcNode) -> CalcNode;
 
+/// This struct is just a stack of [Layer]s with some convenience attached.
 pub struct MultiLayer {
     _layers: Vec<Box<dyn Layer>>,
     _regularization: Option<FloatType>,
@@ -19,6 +17,7 @@ pub struct MultiLayer {
 }
 
 impl MultiLayer {
+    /// All [Layer]s are constructed beforehand and then put into the [MultiLayer].
     pub fn new(layers: Vec<Box<dyn Layer>>) -> Self {
         MultiLayer {
             _layers: layers,
@@ -27,44 +26,36 @@ impl MultiLayer {
         }
     }
 
+    /// Use your own or one of the ones provided in the module [crate::nnetwork::mlp::loss_functions].
     pub fn set_loss_function(&mut self, f: &'static LossFuncType) {
         self._loss_func = Box::new(f);
     }
-
+    
+    /// Set to `Some(float)` to punish non-zero parameters.
     pub fn set_regularization(&mut self, reg: Option<FloatType>) {
         self._regularization = reg;
     }
+    
+    /// Returns the number of [Layer]s
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        self._layers.len()
+    }
 
+    /// Returns the indexed layer. Panics if the index invalid.
     pub fn get_layer(&self, i: usize) -> &dyn Layer {
+        assert!(i< self._layers.len());
         self._layers[i].as_ref()
     }
 
+    /// Forwards the input through all [Layer]s and returns the final result.
     pub fn forward(&self, inp: &CalcNode) -> CalcNode {
         self._layers
             .iter()
-            .fold(inp.clone(), |out, layer| {
-                layer.forward(&out)
-            })
+            .fold(inp.clone(), |out, layer| layer.forward(&out))
     }
 
-    pub fn predict(&self, inp: &CalcNode) -> CalcNode {
-        Self::collapse(&self.forward(inp))
-    }
-
-    fn collapse(inp: &CalcNode) -> CalcNode {
-        let mut vec = vec![0.; inp.len()];
-        let mut rnd = rand::thread_rng().gen_range(0. ..inp.borrow().vals().iter().sum());
-        for (i, &v) in inp.borrow().vals().iter().enumerate() {
-            rnd -= v;
-            if rnd <= 0. || i + 1 == inp.len() {
-                // Safe-guard against float precision errors
-                vec[i] = 1.;
-                break;
-            }
-        }
-        CalcNode::filled_from_shape(inp.shape(), vec)
-    }
-
+    // Helps calculate the loss
     fn calc_regularization(&self) -> CalcNode {
         if let Some(regularization) = self._regularization {
             if regularization <= 0. {
@@ -85,6 +76,7 @@ impl MultiLayer {
         }
     }
 
+    /// Calculates the average loss of the list of (prediction, truth) tuples.
     pub fn loss(&self, inp: &[(CalcNode, CalcNode)]) -> CalcNode {
         let loss = inp
             .iter()
@@ -95,6 +87,7 @@ impl MultiLayer {
         loss + reg
     }
 
+    /// Trains the network on the supplied training data and returns the average loss.
     pub fn train(&mut self, inp: &[(CalcNode, CalcNode)], learning_rate: FloatType) -> FloatType {
         let mut loss = self.loss(inp);
         loss.back_propagation();
@@ -103,12 +96,17 @@ impl MultiLayer {
         loss.value_indexed(0)
     }
 
+    /// Lets every parameter decend its respective gradient.
     fn decend_grad(&mut self, learning_rate: FloatType) {
         self.param_iter_mut()
             .for_each(|p| p.decend_grad(learning_rate));
     }
 
-    // Adds a numerical suffix if the wanted filename is taken. The filename is returned upon successful export.
+    /// Exports all parameters to a text file.
+    /// 
+    /// The filename is returned upon successful export.
+    /// 
+    /// Adds a numerical suffix if the wanted filename is taken.
     pub fn export_parameters(&self, filename: &str) -> std::io::Result<String> {
         let mut fn_string = filename.to_string();
         let mut counter: usize = 0;
@@ -141,6 +139,7 @@ impl MultiLayer {
         Ok(fn_string)
     }
 
+    /// Imports previously exported parameters. Expect errors if the current network does not have the same setup of layers.
     pub fn import_parameters(&mut self, filename: &str) -> Result<(), Error> {
         let mut param_vals: Vec<FloatType> = Vec::new();
         let file_content = read_to_string(filename);
@@ -152,8 +151,7 @@ impl MultiLayer {
                 for line in content.lines() {
                     if line.starts_with("Parameter BEGIN") {
                         // Do nothing
-                    }
-                    else if line.starts_with("Parameter END"){
+                    } else if line.starts_with("Parameter END") {
                         if let Some(target) = target_iter.next() {
                             imported_parameters += 1;
                             assert_eq!(
@@ -165,8 +163,7 @@ impl MultiLayer {
                             target.set_vals(&param_vals);
                         }
                         param_vals.clear();
-                    }
-                    else {
+                    } else {
                         param_vals.push(line.parse().unwrap())
                     }
                 }

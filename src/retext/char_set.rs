@@ -23,10 +23,14 @@ impl CharSet {
         let mut training_data = Vec::new();
         let mut validation_data = Vec::new();
         let n_training = (data.lines().count() as f32 * training_ratio) as usize - 1;
-        
-        data.lines().take(n_training).for_each(|line| training_data.push(line.to_string()));
-        data.lines().skip(n_training).for_each(|line| validation_data.push(line.to_string()));
-        
+
+        data.lines()
+            .take(n_training)
+            .for_each(|line| training_data.push(line.to_string()));
+        data.lines()
+            .skip(n_training)
+            .for_each(|line| validation_data.push(line.to_string()));
+
         let mut chars = Vec::new();
         data.chars().for_each(|c: char| {
             if c.is_ascii_alphabetic() && !chars.contains(&c) {
@@ -81,7 +85,8 @@ impl CharSet {
         if vector.node_type() != NodeType::Vector(VecOrientation::Column) {
             panic!("Can only decode column vectors.");
         }
-        let index: Vec<usize> = vector.borrow()
+        let index: Vec<usize> = vector
+            .borrow()
             .vals()
             .iter()
             .enumerate()
@@ -108,12 +113,12 @@ impl CharSet {
         let mut out_vec = vec![0.; n_rows * n_cols];
         for (col, ch) in s.chars().enumerate() {
             if let Some(row) = self._chars.iter().position(|&k| ch == k) {
-                out_vec[row*n_cols + col] = 1.;
+                out_vec[row * n_cols + col] = 1.;
             } else {
                 return Err(DataSetError::Encoding(ch));
             }
         }
-        Ok( CalcNode::filled_from_shape((n_rows,n_cols), out_vec ) )
+        Ok(CalcNode::new_from_shape((n_rows, n_cols), out_vec))
     }
 }
 

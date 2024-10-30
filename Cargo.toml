@@ -1,5 +1,5 @@
 [package]
-name = "neuronfun"
+name = "net_neurons"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,7 +10,7 @@ rand = "0.8.5"
 rand_distr = "0.4.3"
 
 [[bin]]
-name="retexter"
+name="text_demo"
 
 [[bin]]
-name="rgbvenner"
+name="rgb_demo"
