@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DataSetError"],"struct":["CharSet","ReText"]};
