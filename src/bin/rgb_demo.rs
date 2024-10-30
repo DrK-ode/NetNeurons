@@ -1,6 +1,12 @@
 use std::ops::Range;
 
-use net_neurons::{nnetwork::FloatType, recolor::{color_key::{ColorKey, RGB_VENN_DIAGRAM}, ColorSelector}};
+use net_neurons::{
+    nnetwork::FloatType,
+    recolor::{
+        color_key::{ColorKey, RGB_VENN_DIAGRAM},
+        RGBPredictor,
+    },
+};
 use plotters::{
     chart::{ChartBuilder, LabelAreaPosition},
     prelude::{BitMapBackend, Cross, IntoDrawingArea, Rectangle},
@@ -18,7 +24,7 @@ fn main() {
     const REGULARIZATION: Option<FloatType> = None;
 
     // Instantiate the network
-    let mut categorize = ColorSelector::new(COLOR_KEY, N_HIDDEN_LAYERS, LAYER_SIZE, REGULARIZATION);
+    let mut categorize = RGBPredictor::new(COLOR_KEY, N_HIDDEN_LAYERS, LAYER_SIZE, REGULARIZATION);
 
     // Import previously exported parameters if able. Will fallback to random initiated neurons if the file does not exist, but panic on other errors.
     const IMPORT_FILENAME: &str = "rgb.param";
@@ -70,7 +76,7 @@ fn main() {
 }
 
 fn plot_predictions(
-    predictor: &ColorSelector,
+    predictor: &RGBPredictor,
     x_range: &Range<FloatType>,
     y_range: &Range<FloatType>,
     x_divisions: u32,

@@ -9,13 +9,13 @@ use crate::nnetwork::{
 use crate::recolor::color_key::ColorKey;
 
 /// Manages the construction and training of a network that decides what color a pixel should have.
-pub struct ColorSelector {
+pub struct RGBPredictor {
     _color_key: ColorKey,
     _mlp: MultiLayer,
     _regularization: Option<FloatType>,
 }
 
-impl ColorSelector {
+impl RGBPredictor {
     // Helps ctor
     fn create_layers(n_hidden_layers: usize, layer_size: usize) -> Vec<Box<dyn Layer>> {
         const BIASED_LAYERS: bool = true;
@@ -65,11 +65,11 @@ impl ColorSelector {
         n_hidden_layers: usize,
         layer_size: usize,
         regularization: Option<FloatType>,
-    ) -> ColorSelector {
+    ) -> RGBPredictor {
         let mut mlp = MultiLayer::new(Self::create_layers(n_hidden_layers, layer_size));
         mlp.set_regularization(regularization);
         mlp.set_loss_function(&least_squares);
-        ColorSelector {
+        RGBPredictor {
             _color_key: color_key,
             _mlp: mlp,
             _regularization: regularization,
