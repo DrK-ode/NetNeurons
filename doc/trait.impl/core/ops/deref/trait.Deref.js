@@ -1,3 +1,0 @@
-(function() {var implementors = {
-"net_neurons":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.80.0/core/ops/deref/trait.Deref.html\" title=\"trait core::ops::deref::Deref\">Deref</a> for <a class=\"struct\" href=\"net_neurons/nnetwork/struct.CalcNode.html\" title=\"struct net_neurons::nnetwork::CalcNode\">CalcNode</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

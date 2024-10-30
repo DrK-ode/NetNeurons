@@ -1,1 +1,0 @@
-searchState.loadedDescShard("rgb_demo", 0, "")
