@@ -45,7 +45,7 @@ fn main() {
     }
 
     // The number of updates to the netowrk
-    const TRAINING_CYCLES: usize = 10000;
+    const TRAINING_CYCLES: usize = 50000;
     // The number of data points to use before updating the network by back propagation
     const TRAINING_BATCH_SIZE: usize = 100;
     // The range of learning rates to be used. Will be logspaced.
