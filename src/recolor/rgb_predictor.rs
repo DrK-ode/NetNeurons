@@ -59,7 +59,7 @@ impl ColorSelector {
         layers
     }
 
-    /// After each linear layer a  non-linear [FunctionLayer] is inserted.
+    /// After each linear layer a non-linear [FunctionLayer] is inserted.
     pub fn new(
         color_key: ColorKey,
         n_hidden_layers: usize,

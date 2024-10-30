@@ -9,8 +9,10 @@ use crate::{
 
 use crate::nnetwork::{loss_functions::neg_log_likelihood, CalcNode, FloatType, Layer, MultiLayer};
 
+/// Used to mark the beginning and end of a string
 const SENTINEL_TOKEN: &str = "^";
 
+/// Manages a network that predicts the next character in a name based on the x previous characters.
 pub struct ReText {
     _dataset: CharSet,
     _mlp: MultiLayer,
@@ -26,7 +28,7 @@ impl ReText {
         layer_dim: usize,
     ) -> Vec<Box<dyn Layer>> {
         let mut layers: Vec<Box<dyn Layer>> = Vec::new();
-        let non_linearity = FunctionLayer::new(&FunctionLayer::tanh, "Tanh", "Non-linearity layer");
+        let non_linearity = FunctionLayer::new(&FunctionLayer::sigmoid, "Sigmoid", "Non-linearity layer");
         const BIASED_LAYERS: bool = true;
 
         //Embed
@@ -78,6 +80,9 @@ impl ReText {
         layers
     }
 
+    /// The `block_size` determines how many characters are used to predict the next one.
+    /// 
+    ///  After each linear layer a non-linear [FunctionLayer] is inserted. The last layer is a softmax calculation.
     pub fn new(
         mut data: CharSet,
         block_size: usize,
@@ -106,18 +111,20 @@ impl ReText {
         self._mlp.loss(&correlations).value_indexed(0)
     }
 
+    /// Trains the network for the specified number of cycles. Each cycles uses ´batch_size´ data points.
+    /// The learning rate is a constant for all cycles.
     pub fn train(
         &mut self,
         cycles: usize,
         learning_rate: FloatType,
-        data_size: usize,
+        batch_size: usize,
         verbose: bool,
     ) {
         let timer = Instant::now();
         let mut loss = 0.;
         for n in 0..cycles {
             let data = self._dataset.training_data();
-            let correlations = self.extract_correlations(data, data_size);
+            let correlations = self.extract_correlations(data, batch_size);
             let timer = Instant::now();
             loss = self._mlp.train(&correlations, learning_rate);
 
@@ -137,7 +144,7 @@ impl ReText {
             timer.elapsed().as_millis(), loss
         );
 
-        let validation = self.validate(data_size);
+        let validation = self.validate(batch_size);
         println!("Validation loss: {}", validation);
     }
 
@@ -183,10 +190,11 @@ impl ReText {
         correlations
     }
 
+    /// Predicts the next `n_char` characters given the starting `seed_string´. If a sentinel token is predicted the string is terminated regardless of size.
     pub fn predict(
         &mut self,
         seed_string: &str,
-        number_of_characters: usize,
+        n_char: usize,
     ) -> Result<String, DataSetError> {
         assert!(
             !seed_string.is_empty(),
@@ -194,7 +202,7 @@ impl ReText {
         );
         // Pad the string with the sentinel token
         let mut str = SENTINEL_TOKEN.to_string().repeat(self._block_size - 1) + seed_string;
-        for _ in 0..number_of_characters {
+        for _ in 0..n_char {
             // The following line break upon non ascii input
             let mut last = self._dataset.encode(&str[str.len() - self._block_size..])?;
             last = self._mlp.forward(&last).collapse();

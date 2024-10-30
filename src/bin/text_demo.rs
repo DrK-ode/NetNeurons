@@ -1,5 +1,5 @@
 use net_neurons::nnetwork::FloatType;
-use net_neurons::retext::char_set::CharSet;
+use net_neurons::retext::CharSet;
 use net_neurons::retext::ReText;
 
 fn main() {
