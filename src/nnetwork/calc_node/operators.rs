@@ -76,7 +76,7 @@ impl Add for &CalcNode {
         } else {
             panic!("Invalid operands for addition {a} and {b}.");
         };
-        let result = CalcNode::filled_from_shape(a.shape(), result);
+        let result = CalcNode::new_from_shape(a.shape(), result);
         result.borrow_mut()._parent_nodes = vec![a.clone(), b.clone()];
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
             let parents = &child.borrow()._parent_nodes;
@@ -127,14 +127,15 @@ impl Mul for &CalcNode {
         if b.len() == 1 {
             let scalar = b.value_indexed(0);
             let result = a.borrow()._vals.iter().map(|a| a * scalar).collect();
-            let result = CalcNode::filled_from_shape(a.shape(), result);
+            let result = CalcNode::new_from_shape(a.shape(), result);
             result.borrow_mut()._parent_nodes = vec![a.clone(), b.clone()];
             result.borrow_mut()._back_propagation = Some(Box::new(|child| {
                 let parents = &child.borrow()._parent_nodes;
                 let scalar_val = parents[1].borrow()._vals[0];
                 for (i, &child_grad) in child.borrow()._grad.iter().enumerate() {
                     parents[0].borrow_mut()._grad[i] += child_grad * scalar_val;
-                    parents[1].borrow_mut()._grad[0] += child_grad * parents[0].borrow()._vals[i];
+                    let value = parents[0].borrow()._vals[i];
+                    parents[1].borrow_mut()._grad[0] += child_grad * value;
                 }
             }));
             result
@@ -158,7 +159,7 @@ impl Mul for &CalcNode {
                     lhs_row.zip(rhs_col).map(|(&r, &c)| r * c).sum()
                 })
                 .collect();
-            let result = CalcNode::filled_from_shape((m, p), result);
+            let result = CalcNode::new_from_shape((m, p), result);
             result.borrow_mut()._parent_nodes = vec![self.clone(), b.clone()];
             result.borrow_mut()._back_propagation = Some(Box::new(|child| {
                 let parents = &child.borrow()._parent_nodes;
@@ -169,25 +170,44 @@ impl Mul for &CalcNode {
                     let row = i / p;
                     let col = i % p;
                     {
-                        // RHS derivative
-                        let lhs = &parents[0].borrow()._vals;
-                        let rhs = &mut parents[1].borrow_mut()._grad;
-                        let lhs_row = lhs.iter().skip(row * n).take(n);
-                        let rhs_col = rhs.iter_mut().skip(col).step_by(p);
-                        rhs_col
-                            .zip(lhs_row)
-                            .for_each(|(d, &v)| *d += v * child_grad);
+                        // Need to avoid borrowing mutables in the case when lhs = rhs
+                        let mut rhs = vec![0.; parents[1].len()];
+                        {
+                            // RHS derivative
+                            let lhs = &parents[0].borrow()._vals;
+                            //let rhs = &mut parents[1].borrow_mut()._grad;
+                            let lhs_row = lhs.iter().skip(row * n).take(n);
+                            let rhs_col = rhs.iter_mut().skip(col).step_by(p);
+                            rhs_col
+                                .zip(lhs_row)
+                                .for_each(|(d, &v)| *d += v * child_grad);
+                        }
+                        parents[1]
+                            .borrow_mut()
+                            ._grad
+                            .iter_mut()
+                            .zip(rhs.into_iter())
+                            .for_each(|(target, new_value)| *target += new_value);
                     }
 
                     {
+                        // Need to avoid borrowing mutables in the case when lhs = rhs
+                        let mut lhs = vec![0.; parents[0].len()];
+                        {
                         // LHS derivative
-                        let lhs = &mut parents[0].borrow_mut()._grad;
                         let rhs = &parents[1].borrow()._vals;
                         let lhs_row = lhs.iter_mut().skip(row * n).take(n);
                         let rhs_col = rhs.iter().skip(col).step_by(p);
                         lhs_row
                             .zip(rhs_col)
                             .for_each(|(d, &v)| *d += v * child_grad);
+                        }
+                        parents[0]
+                            .borrow_mut()
+                            ._grad
+                            .iter_mut()
+                            .zip(lhs.into_iter())
+                            .for_each(|(target, new_value)| *target += new_value);
                     }
                 }
             }));
@@ -291,7 +311,7 @@ impl CalcNode {
 // Exponentiate
 impl CalcNode {
     pub fn exp(&self) -> CalcNode {
-        let result = Self::filled_from_shape(
+        let result = Self::new_from_shape(
             self.borrow()._shape,
             self.borrow()._vals.iter().map(|v| v.exp()).collect(),
         );
@@ -311,7 +331,7 @@ impl CalcNode {
 // Log
 impl CalcNode {
     pub fn log(&self) -> CalcNode {
-        let result = Self::filled_from_shape(
+        let result = Self::new_from_shape(
             self.borrow()._shape,
             self.borrow()._vals.iter().map(|v| v.ln()).collect(),
         );
@@ -332,7 +352,7 @@ impl CalcNode {
     pub fn pow(&self, power: &CalcNode) -> CalcNode {
         assert!(power.len() == 1);
         let p = power.value_indexed(0);
-        let result = Self::filled_from_shape(
+        let result = Self::new_from_shape(
             self.borrow()._shape,
             self.borrow()._vals.iter().map(|v| v.powf(p)).collect(),
         );
@@ -365,13 +385,15 @@ impl CalcNode {
             .zip(other.borrow()._vals.iter())
             .map(|(a, b)| a * b)
             .collect();
-        let result = CalcNode::filled_from_shape(self.shape(), result);
+        let result = CalcNode::new_from_shape(self.shape(), result);
         result.borrow_mut()._parent_nodes = vec![self.clone(), other.clone()];
         result.borrow_mut()._back_propagation = Some(Box::new(|child| {
             let parents = &child.borrow()._parent_nodes;
             for (i, &child_grad) in child.borrow()._grad.iter().enumerate() {
-                parents[0].borrow_mut()._grad[i] += child_grad * parents[1].borrow()._vals[i];
-                parents[1].borrow_mut()._grad[i] += child_grad * parents[0].borrow()._vals[i];
+                let val0 = parents[0].borrow()._vals[i];
+                let val1 = parents[1].borrow()._vals[i];
+                parents[0].borrow_mut()._grad[i] += child_grad * val1;
+                parents[1].borrow_mut()._grad[i] += child_grad * val0;
             }
         }));
         result
@@ -440,6 +462,48 @@ mod tests {
     }
 
     #[test]
+    fn multiplication_of_scalar_to_itself() {
+        let inp = CalcNode::new_scalar(3.);
+        let mut out = &inp * &inp;
+        assert_eq!(out.value_indexed(0), 9.);
+        out.back_propagation();
+        assert_eq!(out.gradient_indexed(0), 1.);
+        assert_eq!(inp.gradient_indexed(0), 6.);
+    }
+
+    #[test]
+    fn elementwise_multiplication_of_vector_to_itself() {
+        let inp = CalcNode::new_col_vector(vec![3., 4.]);
+        let mut out = inp.element_wise_mul(&inp);
+        assert_eq!(out.value_indexed(0), 9.);
+        assert_eq!(out.value_indexed(1), 16.);
+        out.back_propagation();
+        assert_eq!(out.gradient_indexed(0), 1.);
+        assert_eq!(out.gradient_indexed(1), 1.);
+        assert_eq!(inp.gradient_indexed(0), 6.);
+        assert_eq!(inp.gradient_indexed(1), 8.);
+    }
+
+    #[test]
+    fn multiplication_of_matrix_to_itself() {
+        let inp = CalcNode::new_from_shape((2, 2), vec![1., 0., 0., 1.]);
+        let mut out = &inp * &inp;
+        assert_eq!(out.value_indexed(0), 1.);
+        assert_eq!(out.value_indexed(1), 0.);
+        assert_eq!(out.value_indexed(2), 0.);
+        assert_eq!(out.value_indexed(3), 1.);
+        out.back_propagation();
+        assert_eq!(out.gradient_indexed(0), 1.);
+        assert_eq!(out.gradient_indexed(1), 1.);
+        assert_eq!(out.gradient_indexed(2), 1.);
+        assert_eq!(out.gradient_indexed(3), 1.);
+        assert_eq!(inp.gradient_indexed(0), 2.);
+        assert_eq!(inp.gradient_indexed(1), 2.);
+        assert_eq!(inp.gradient_indexed(2), 2.);
+        assert_eq!(inp.gradient_indexed(3), 2.);
+    }
+
+    #[test]
     fn multiplication_of_vector_and_scalar() {
         let inp1 = CalcNode::new_col_vector(vec![1., 2.]);
         let inp2 = CalcNode::new_scalar(3.);
@@ -471,7 +535,7 @@ mod tests {
 
     #[test]
     fn matrix_multiplication_with_vector() {
-        let inp1 = CalcNode::filled_from_shape((2, 2), vec![1., 2., 3., 4.]);
+        let inp1 = CalcNode::new_from_shape((2, 2), vec![1., 2., 3., 4.]);
         let inp2 = CalcNode::new_col_vector(vec![5., 6.]);
         let expected_value = &[17., 39.];
         let expected_derivative1 = &[5., 6., 5., 6.];
@@ -486,8 +550,8 @@ mod tests {
 
     #[test]
     fn matrix_multiplication_square_matrices() {
-        let inp1 = CalcNode::filled_from_shape((2, 2), vec![1., 2., 3., 4.]);
-        let inp2 = CalcNode::filled_from_shape((2, 2), vec![5., 6., 7., 8.]);
+        let inp1 = CalcNode::new_from_shape((2, 2), vec![1., 2., 3., 4.]);
+        let inp2 = CalcNode::new_from_shape((2, 2), vec![5., 6., 7., 8.]);
         let expected_value = &[19., 22., 43., 50.];
         let expected_derivative1 = &[11., 15., 11., 15.];
         let expected_derivative2 = &[4., 4., 6., 6.];
@@ -501,8 +565,8 @@ mod tests {
 
     #[test]
     fn matrix_multiplication_non_square_matrices() {
-        let inp1 = CalcNode::filled_from_shape((2, 3), vec![1., 2., 3., 4., 5., 6.]);
-        let inp2 = CalcNode::filled_from_shape((3, 2), vec![7., 8., 9., 10., 11., 12.]);
+        let inp1 = CalcNode::new_from_shape((2, 3), vec![1., 2., 3., 4., 5., 6.]);
+        let inp2 = CalcNode::new_from_shape((3, 2), vec![7., 8., 9., 10., 11., 12.]);
         let expected_value = &[58., 64., 139., 154.];
         let expected_derivative1 = &[15., 19., 23., 15., 19., 23.];
         let expected_derivative2 = &[5., 5., 7., 7., 9., 9.];
