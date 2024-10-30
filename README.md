@@ -11,3 +11,4 @@ This program predicts the next letter based on the previous ones. By default it 
 This program predicts the colour of a a pair of coordinates. It is trained on rules that defines whether or not coordinates should be red, blue and/or green. Ideally the result should show eight monocoloured regions taking all different overlaps into account. After training two plots are prepared to allow for visual inspection of how well the network was performing. A sample output of ReColor is shown below.
 
 ![Image](./plot_rgb.png)
+![Image](./plot_loss.png)
