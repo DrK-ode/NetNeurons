@@ -12,3 +12,6 @@ This program predicts the colour of a a pair of coordinates. It is trained on ru
 
 ![Image](./plot_rgb.png)
 ![Image](./plot_loss.png)
+
+# TODOs
+There are many things that are missing or not optimal. More advanced schemes of training and a nicer export and import functions would be next in line for some improvements.
