@@ -1,5 +1,5 @@
 # Project scope
-This is my first (except the two rewrites) take on a neural network. It is written with minimal dependencies for fun and educational purposes. It is also my first proper Rust project which added to both the difficulty and the educational value. It is *not* the new TensorFlow or PyTorch killer :)
+This is my first (except the two rewrites) take on a neural network. It is written with minimal dependencies for fun and educational purposes. It is also my first proper Rust project which added to both the difficulty and the educational value. Documentation available [on GitHub pages](https://drk-ode.github.io/NetNeurons/). It is *not* the new TensorFlow or PyTorch killer :)
 
 # Demos
 There are two binaries in the project called **ReText** and **ReColor**. Both use the same underlying code but slightly different. Both can also export and import the values of the trained parameters.
